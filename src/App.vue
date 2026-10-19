@@ -183,6 +183,12 @@
                   </template>
                   <template #default>导出配置</template>
                 </a-button>
+                <a-button type="primary" @click="openSyncModal" size="mini">
+                  <template #icon>
+                    <IconCloud/>
+                  </template>
+                  <template #default>云端同步{{ syncConnected ? '·已开启' : '' }}</template>
+                </a-button>
                 <a-button type="primary" @click="resetBox"
                           size="mini">
                   <template #icon>
@@ -234,10 +240,77 @@
     <div class="import-preview-tip">勾选需要导入的面板，导入后将追加到当前导航末尾。</div>
   </a-modal>
 
+  <!-- 云端同步弹窗：GitHub Gist 存储，多设备共享同一份配置 -->
+  <a-modal v-model:visible="syncModalVisible" title="云端同步" :width="480" :footer="false">
+
+    <!-- 已连接：状态展示 + 手动操作 -->
+    <template v-if="syncConnected">
+      <div class="sync-meta-row"><span class="sync-meta-label">存储位置</span><span>私密 Gist（保存在你自己的 GitHub 账号中）</span></div>
+      <div class="sync-meta-row"><span class="sync-meta-label">本机设备名</span><span>{{ syncSettings.deviceName || '未命名设备' }}</span></div>
+      <div class="sync-meta-row"><span class="sync-meta-label">上次同步</span><span>{{ formatTime(syncSettings.lastSyncAt) }}</span></div>
+      <div class="sync-meta-row">
+        <span class="sync-meta-label">云端 Gist</span>
+        <a-link v-if="syncSettings.gistUrl" :href="syncSettings.gistUrl" target="_blank">打开 Gist 页面</a-link>
+        <span v-else>—</span>
+      </div>
+      <div class="sync-tip" style="margin-top: 10px">
+        自动同步开启时：本机修改后 3 秒自动上传；打开页面时自动检查并拉取云端更新；两端都有修改时由你选择使用哪一份。
+      </div>
+      <a-checkbox v-model="syncSettings.autoSync" style="margin-top: 6px">自动同步（推荐）</a-checkbox>
+      <a-space wrap style="margin-top: 16px">
+        <a-button type="primary" size="small" :loading="syncBusy" @click="pushToCloud(false)">
+          <template #icon>
+            <IconUpload/>
+          </template>
+          立即上传（覆盖云端）
+        </a-button>
+        <a-button size="small" :loading="syncBusy" @click="pullFromCloud">
+          <template #icon>
+            <IconDownload/>
+          </template>
+          立即拉取（覆盖本机）
+        </a-button>
+        <a-button size="small" status="danger" @click="disconnectSync">断开连接</a-button>
+      </a-space>
+    </template>
+
+    <!-- 未连接：连接表单 -->
+    <template v-else>
+      <div class="sync-tip">
+        配置将保存到你自己 GitHub 账号下的<b>私密 Gist</b>，多台设备登录后即可共享同一份导航配置，全程不经过任何第三方服务器。
+      </div>
+      <a-form :model="syncForm" layout="vertical">
+        <a-form-item field="token" label="GitHub 访问令牌（必填）">
+          <a-input-password v-model="syncForm.token" placeholder="github_pat_… 或 ghp_…" allow-clear/>
+        </a-form-item>
+        <a-form-item field="gistId" label="Gist ID（选填，留空自动创建）">
+          <a-input v-model="syncForm.gistId" placeholder="32/64 位 Gist ID，多设备接入时填同一 ID" allow-clear/>
+        </a-form-item>
+        <a-form-item field="deviceName" label="本机设备名称">
+          <a-input v-model="syncForm.deviceName" placeholder="如：公司电脑、MacBook，用于区分修改来源" allow-clear/>
+        </a-form-item>
+      </a-form>
+      <div class="sync-tip">
+        令牌获取：GitHub → Settings → Developer settings → Personal access tokens →
+        <a-link href="https://github.com/settings/personal-access-tokens/new" target="_blank">Generate new token</a-link>，
+        仅勾选 <b>Account permissions → Gists: Read and write</b> 即可（无需任何仓库权限；classic token 则仅勾选 gist scope）。<br/>
+        安全说明：令牌明文保存在本机浏览器 localStorage，请勿使用带有仓库/管理员权限的令牌；私密 Gist 任何持有链接者可访问，请勿外传 Gist 链接。
+      </div>
+      <a-space style="margin-top: 8px">
+        <a-button type="primary" :loading="syncBusy" @click="connectSync">
+          <template #icon>
+            <IconLink/>
+          </template>
+          连接并同步
+        </a-button>
+      </a-space>
+    </template>
+  </a-modal>
+
 </template>
 
 <script setup>
-import {ref, reactive, watch} from "vue";
+import {ref, reactive, watch, computed, onMounted} from "vue";
 import draggable from 'vuedraggable';
 import {
   IconApps,
@@ -250,8 +323,13 @@ import {
   IconExport,
   IconSettings,
   IconUndo,
+  IconCloud,
+  IconUpload,
+  IconDownload,
+  IconLink,
 } from '@arco-design/web-vue/es/icon';
-import {Message} from '@arco-design/web-vue';
+import {Message, Modal} from '@arco-design/web-vue';
+import {createConfigGist, fetchConfig, updateConfig} from './sync/gist.js';
 import defaultBox from './json/defaultBox.json'
 import defaultSearchToolbox from './json/defaultSearchToolbox.json'
 import defaultIcon from './icon.png'
@@ -316,6 +394,7 @@ watch(box, (newVal) => {
     boxStr.value = JSON.stringify(newVal, null, 2);
     boxPreStr = compact;
     persistBox(compact);
+    markLocalEdited(); // 通知云端同步模块：本机配置有变化（自动上传防抖）
   }
 });
 
@@ -366,6 +445,258 @@ const exportConfig = () => {
     Message.error({content: '配置导出失败', showIcon: true});
   }
 };
+
+/** ---------------- 云端同步（GitHub Gist 存储，可扩展其他后端） ----------------
+ * 模型：整体快照同步（与 JSON 导入/导出同一替换语义），靠 updatedAt 时间戳做新者胜出；
+ * - 自动同步开启时：本机编辑 3 秒防抖后自动上传；打开页面时自动检查云端更新；
+ * - 冲突（云端与本机都有修改）时弹窗由用户选择使用哪一份，绝不静默丢数据。
+ */
+const SYNC_KEY = 'ilink-sync';
+const AUTO_PUSH_DELAY = 3000;
+
+const loadSyncSettings = () => {
+  try {
+    const raw = localStorage.getItem(SYNC_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return s && typeof s === 'object' ? s : null;
+  } catch (e) {
+    console.warn('[iLink] 云同步设置读取失败，已重置:', e);
+    return null;
+  }
+};
+
+let syncSettings = reactive(Object.assign({
+  provider: 'gist',          // 当前存储后端标识，预留 supabase 等扩展
+  token: '',
+  gistId: '',
+  gistUrl: '',
+  deviceName: '',
+  autoSync: true,
+  lastSyncAt: 0,             // 上次成功同步（上传或拉取）时间
+  lastCloudUpdatedAt: 0,     // 云端载荷的 updatedAt，用于判断"云端是否有新版本"
+  lastLocalState: '',        // 上次同步成功时的本机配置快照，用于判断"本机是否有未同步修改"
+}, loadSyncSettings() || {}));
+
+const persistSyncSettings = () => {
+  try {
+    localStorage.setItem(SYNC_KEY, JSON.stringify({
+      provider: syncSettings.provider,
+      token: syncSettings.token,
+      gistId: syncSettings.gistId,
+      gistUrl: syncSettings.gistUrl,
+      deviceName: syncSettings.deviceName,
+      autoSync: syncSettings.autoSync,
+      lastSyncAt: syncSettings.lastSyncAt,
+      lastCloudUpdatedAt: syncSettings.lastCloudUpdatedAt,
+      lastLocalState: syncSettings.lastLocalState,
+    }));
+  } catch (e) {
+    console.warn('[iLink] 云同步设置写入失败:', e);
+  }
+};
+watch(syncSettings, persistSyncSettings, {deep: true});
+
+const syncConnected = computed(() => !!(syncSettings.token && syncSettings.gistId));
+const syncBusy = ref(false);
+const syncModalVisible = ref(false);
+const syncForm = reactive({token: '', gistId: '', deviceName: syncSettings.deviceName || ''});
+
+let suppressAutoPush = false; // 拉取云端后短暂抑制自动上传，避免"拉取→触发编辑→立刻回传"的回声
+let autoPushTimer = null;
+
+const formatTime = (ts) => {
+  if (!ts) return '从未';
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// 本机配置变化时的自动上传调度（在 watch(box) 中被调用）
+const markLocalEdited = () => {
+  if (suppressAutoPush) return;
+  if (!syncConnected.value || !syncSettings.autoSync) return;
+  if (autoPushTimer) clearTimeout(autoPushTimer);
+  autoPushTimer = setTimeout(() => {
+    autoPushTimer = null;
+    pushToCloud(true);
+  }, AUTO_PUSH_DELAY);
+};
+
+// 把云端载荷应用到本机（整体替换，保持与 JSON 导入一致的语义）
+const applyCloudToLocal = (payload, {silent = false} = {}) => {
+  suppressAutoPush = true;
+  setTimeout(() => { suppressAutoPush = false; }, AUTO_PUSH_DELAY + 500);
+  const incoming = payload.box.map((p) => JSON.parse(JSON.stringify(p)));
+  box.splice(0, box.length, ...incoming);
+  syncSettings.lastCloudUpdatedAt = payload.updatedAt || 0;
+  syncSettings.lastSyncAt = Date.now();
+  syncSettings.lastLocalState = JSON.stringify(box);
+  if (!silent) Message.success({content: '已应用云端配置', showIcon: true});
+};
+
+// 上传当前配置到云端（silent=true 时为自动同步，不弹提示）
+const pushToCloud = async (silent = false) => {
+  if (!syncConnected.value || syncBusy.value) return;
+  syncBusy.value = true;
+  try {
+    await updateConfig(syncSettings.token, syncSettings.gistId, box, syncSettings.deviceName);
+    syncSettings.lastCloudUpdatedAt = Date.now();
+    syncSettings.lastSyncAt = Date.now();
+    syncSettings.lastLocalState = JSON.stringify(box);
+    if (!silent) Message.success({content: '已上传到云端（覆盖云端配置）', showIcon: true});
+  } catch (e) {
+    console.error('[iLink] 云端上传失败:', e);
+    if (!silent) Message.error({content: `上传失败：${e.message}`, showIcon: true});
+  } finally {
+    syncBusy.value = false;
+  }
+};
+
+// 从云端拉取配置（手动按钮，覆盖本机前二次确认）
+const pullFromCloud = async () => {
+  if (!syncConnected.value || syncBusy.value) return;
+  syncBusy.value = true;
+  try {
+    const {payload} = await fetchConfig(syncSettings.token, syncSettings.gistId);
+    if (!payload) {
+      Message.warning({content: '云端还没有配置，可先「立即上传」把本机配置推上去', showIcon: true});
+      return;
+    }
+    Modal.confirm({
+      title: '从云端拉取配置',
+      content: `将用云端配置（${formatTime(payload.updatedAt)} 由 ${payload.device || '未知设备'} 更新）覆盖本机当前配置，是否继续？`,
+      okText: '覆盖本机',
+      cancelText: '取消',
+      onOk: () => applyCloudToLocal(payload),
+    });
+  } catch (e) {
+    console.error('[iLink] 云端拉取失败:', e);
+    Message.error({content: `拉取失败：${e.message}`, showIcon: true});
+  } finally {
+    syncBusy.value = false;
+  }
+};
+
+// 打开页面时的自动检查：云端有新版本→静默应用或弹冲突选择；本机有未同步修改→自动补传
+const startupSyncCheck = async () => {
+  if (!syncConnected.value || !syncSettings.autoSync) return;
+  try {
+    const {payload} = await fetchConfig(syncSettings.token, syncSettings.gistId);
+    if (!payload) {
+      pushToCloud(true); // 云端为空：把本机配置作为初始版本推上去
+      return;
+    }
+    const cloudNewer = (payload.updatedAt || 0) > (syncSettings.lastCloudUpdatedAt || 0);
+    const localDirty = JSON.stringify(box) !== (syncSettings.lastLocalState || '');
+    if (cloudNewer && !localDirty) {
+      applyCloudToLocal(payload, {silent: true});
+      Message.success({content: `已自动同步云端配置（来自 ${payload.device || '其他设备'}）`, showIcon: true});
+    } else if (cloudNewer && localDirty) {
+      Modal.confirm({
+        title: '检测到配置冲突',
+        content: `云端配置由「${payload.device || '未知设备'}」更新于 ${formatTime(payload.updatedAt)}，而本机在上次同步后也有修改。使用哪一份？`,
+        okText: '使用云端（覆盖本机）',
+        cancelText: '保留本机（稍后自动上传）',
+        onOk: () => applyCloudToLocal(payload),
+        onCancel: () => markLocalEdited(), // 保留本机：走自动上传防抖覆盖云端
+      });
+    } else if (!cloudNewer && localDirty) {
+      pushToCloud(true);
+    }
+  } catch (e) {
+    // 启动检查属于后台行为，失败仅记录日志，不打扰用户
+    console.warn('[iLink] 启动时云端检查失败:', e.message);
+  }
+};
+
+// 首次连接：校验令牌 → 复用或自动创建私密 Gist → 处理"云端已有旧配置"的情况
+const connectSync = async () => {
+  const token = syncForm.token.trim();
+  if (!token) {
+    Message.warning({content: '请填写 GitHub 访问令牌（Token）', showIcon: true});
+    return;
+  }
+  const deviceName = syncForm.deviceName.trim() || '我的设备';
+  syncBusy.value = true;
+  try {
+    let gistId = syncForm.gistId.trim();
+    let first = {payload: null, gistHtmlUrl: ''};
+    if (gistId) {
+      first = await fetchConfig(token, gistId); // 同时完成令牌与 Gist ID 的有效性校验
+      if (!first.payload) await updateConfig(token, gistId, box, deviceName); // Gist 为空：先上传本机
+    } else {
+      gistId = await createConfigGist(token, box, deviceName);
+      first = await fetchConfig(token, gistId);
+    }
+    const finish = (payload) => {
+      syncSettings.token = token;
+      syncSettings.gistId = gistId;
+      syncSettings.gistUrl = first.gistHtmlUrl;
+      syncSettings.deviceName = deviceName;
+      syncSettings.autoSync = true;
+      syncSettings.lastCloudUpdatedAt = payload ? (payload.updatedAt || Date.now()) : Date.now();
+      syncSettings.lastSyncAt = Date.now();
+      syncSettings.lastLocalState = JSON.stringify(box);
+      syncModalVisible.value = false;
+      Message.success({content: '云端同步已开启，多设备将共享同一份配置', showIcon: true});
+    };
+    const cloudContent = first.payload ? JSON.stringify(first.payload.box) : '';
+    if (cloudContent && cloudContent !== JSON.stringify(box)) {
+      Modal.confirm({
+        title: '检测到云端已有配置',
+        content: `云端配置更新于 ${formatTime(first.payload.updatedAt)}（来源 ${first.payload.device || '未知设备'}）。使用哪一份？`,
+        okText: '使用云端（覆盖本机）',
+        cancelText: '保留本机（上传覆盖云端）',
+        onOk: () => {
+          applyCloudToLocal(first.payload, {silent: true});
+          finish(first.payload);
+        },
+        onCancel: () => {
+          updateConfig(token, gistId, box, deviceName)
+              .then(() => finish(null))
+              .catch((err) => Message.error({content: `上传失败：${err.message}`, showIcon: true}));
+        },
+      });
+    } else {
+      finish(first.payload);
+    }
+  } catch (e) {
+    console.error('[iLink] 云端连接失败:', e);
+    Message.error({content: `连接失败：${e.message}`, showIcon: true});
+  } finally {
+    syncBusy.value = false;
+  }
+};
+
+// 断开连接：仅清除本机连接信息，云端 Gist 数据保留（可随时重连）
+const disconnectSync = () => {
+  Modal.confirm({
+    title: '断开云端同步',
+    content: '仅清除本机保存的连接信息；云端 Gist 中的配置数据会保留，之后可重新连接恢复。',
+    okText: '断开',
+    cancelText: '取消',
+    onOk: () => {
+      syncSettings.token = '';
+      syncSettings.gistId = '';
+      syncSettings.gistUrl = '';
+      syncSettings.lastCloudUpdatedAt = 0;
+      syncSettings.lastSyncAt = 0;
+      syncSettings.lastLocalState = '';
+      syncModalVisible.value = false;
+      Message.success({content: '已断开云端同步', showIcon: true});
+    },
+  });
+};
+
+const openSyncModal = () => {
+  syncForm.deviceName = syncSettings.deviceName || syncForm.deviceName;
+  syncModalVisible.value = true;
+};
+
+onMounted(() => {
+  startupSyncCheck();
+});
 
 /** ---------------- 搜索 ---------------- */
 let keywords = ref('');

@@ -286,3 +286,23 @@ li {
     color: var(--color-neutral-6);
     font-size: 12px;
 }
+
+/* ---------------- 云端同步弹窗 ---------------- */
+.sync-meta-row {
+    display: flex;
+    font-size: 13px;
+    line-height: 1.9;
+}
+
+.sync-meta-label {
+    width: 84px;
+    flex-shrink: 0;
+    color: var(--color-neutral-6);
+}
+
+.sync-tip {
+    margin-top: 8px;
+    color: var(--color-neutral-6);
+    font-size: 12px;
+    line-height: 1.7;
+}

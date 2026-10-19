@@ -1,7 +1,7 @@
 {
   "name": "ilink",
-  "version": "1.0.0",
-  "description": "iLink - 一个简洁的无后端静态导航站点（个人书签页）",
+  "version": "1.1.0",
+  "description": "iLink - 一个简洁的无后端静态导航站点（个人书签页） | 支持多设备云端同步",
   "private": true,
   "scripts": {
     "dev": "vite",
