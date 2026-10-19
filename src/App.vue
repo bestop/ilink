@@ -1,44 +1,4 @@
 <template>
-  <!--  <div class="menu-demo">
-      <a-menu mode="pop" showCollapseButton>
-        <a-menu-item key="1">
-          <template #icon>
-            <icon-apps></icon-apps>
-          </template>
-          Navigation 1
-        </a-menu-item>
-        <a-sub-menu key="2">
-          <template #icon>
-            <icon-bug></icon-bug>
-          </template>
-          <template #title>Navigation 2</template>
-          <a-menu-item key="2_0">Beijing</a-menu-item>
-          <a-menu-item key="2_1">Shanghai</a-menu-item>
-          <a-menu-item key="2_2">Guangzhou</a-menu-item>
-        </a-sub-menu>
-        <a-sub-menu key="3">
-          <template #icon>
-            <icon-bulb></icon-bulb>
-          </template>
-          <template #title>Navigation 3</template>
-          <a-menu-item key="3_0">Wuhan</a-menu-item>
-          <a-menu-item key="3_1">Chengdu</a-menu-item>
-        </a-sub-menu>
-        <a-menu-item key="4">
-          <template #icon>
-            <icon-safe></icon-safe>
-          </template>
-          Navigation 4
-        </a-menu-item>
-        <a-menu-item key="5">
-          <template #icon>
-            <icon-fire></icon-fire>
-          </template>
-          Navigation 5
-        </a-menu-item>
-      </a-menu>
-    </div>-->
-
   <!-- 右下角按钮 -->
   <a-trigger
       :trigger="['click', 'hover']"
@@ -83,21 +43,26 @@
         <!-- 搜索功能 -->
         <div
             style="padding: 20px; flex-direction: column; display: flex;  justify-content: center;  align-items: center;">
-          <div>
-            <a-space direction="vertical" size="large" style="border: 1px solid var(--color-neutral-3);">
-              <a-input-search :style="{width:'760px'}"
+          <div style="width: 100%; max-width: 760px;">
+            <a-space direction="vertical" size="large"
+                     style="border: 1px solid var(--color-neutral-3); width: 100%;">
+              <a-input-search :style="{width: '100%'}"
                               placeholder="输入关键词后，点击下方的搜索网站，直接会跳转到新标签页搜索"
                               v-model="keywords"/>
             </a-space>
 
             <div class="search-panel">
-              <div v-for="line in searchToolbox">
+              <div v-for="line in searchToolbox" :key="line.name">
                 <div :class="{'search-line': true, 'no-visible': line.collapsed}">
                   <div class="search-line-title"><span class="nowrap">{{ line.name }}</span></div>
                   <ul class="search-line-ul">
-                    <li class="search-line-li" v-for="site in line.sites">
-                      <a class="search-line-li-a cursor-pointer" @click.left="goToSearch(site.src)" @click.middle="goToSearch(site.src)" >
-                        <img class="search-line-li-a-img" :src="'https://hijoe.net/images/2020/icon.png'">
+                    <li class="search-line-li" v-for="site in line.sites" :key="site.name + site.src">
+                      <a class="search-line-li-a cursor-pointer" @click.left="goToSearch(site.src)"
+                         @click.middle="goToSearch(site.src)">
+                        <img class="search-line-li-a-img" alt=""
+                             :src="getFaviconUrl(site.src)"
+                             :data-host="getUrlHost(site.src)"
+                             @error="onFaviconError">
                         <span class="nowrap">{{ site.name }}</span>
                       </a>
                     </li>
@@ -122,14 +87,13 @@
           </div>
 
           <!-- 编辑功能 -->
-          <div style="">
-
+          <div style="width: 100%; max-width: 760px;">
 
             <!-- 导航本体 -->
             <draggable :list="box" handle=".category-drag-handle" :animation="100" draggable=".tab" group="tabs"
                        itemKey="index">
               <template #item="{element:tab, index: t}">
-                <a-card :key="t" class="tab" :style="{ width: '760px','margin-top': '20px' }" :title="tab.name"
+                <a-card :key="t" class="tab" :style="{ width: '100%','margin-top': '20px' }" :title="tab.name"
                         hoverable>
                   <template #extra>
                     <a-space size="medium">
@@ -149,7 +113,10 @@
                         <template #item="{element :link, index: j}">
                           <li :class="{'link-li': true, 'link-li-editable':controlEditable}">
                             <div class="link-chip">
-                              <img class="link-chip-image" :src="'https://hijoe.net/images/2020/icon.png'">
+                              <img class="link-chip-image" alt=""
+                                   :src="getFaviconUrl(link.url)"
+                                   :data-host="getUrlHost(link.url)"
+                                   @error="onFaviconError">
                               <a-tooltip :content="link.name" position="tl" mini>
                                 <a class="link-a" :data-url="link.url" @click.left="goToUrl(t, i, j,link.url)"
                                    @click.middle="goToUrl(t, i, j,link.url)">{{ link.name }}</a>
@@ -204,11 +171,17 @@
                   </template>
                   <template #default>添加导航面板</template>
                 </a-button>
-                <a-button type="primary" @click="importFromChrome" size="mini">
+                <a-button type="primary" @click="triggerBookmarkImport" size="mini">
                   <template #icon>
                     <IconImport/>
                   </template>
-                  <template #default>从Chrome书签中导入</template>
+                  <template #default>从书签文件导入</template>
+                </a-button>
+                <a-button type="primary" @click="exportConfig" size="mini">
+                  <template #icon>
+                    <IconExport/>
+                  </template>
+                  <template #default>导出配置</template>
                 </a-button>
                 <a-button type="primary" @click="resetBox"
                           size="mini">
@@ -217,8 +190,10 @@
                   </template>
                   <template #default>重置为默认</template>
                 </a-button>
-                <!--        <input type="file" ref="file" :class="{'hidden':!controlEditable}" @change="readFile()"/>-->
               </a-space>
+              <!-- 隐藏的文件选择框,用于书签导入 -->
+              <input ref="bookmarkFileInput" type="file" accept=".html,.htm,text/html" class="hidden"
+                     @change="readBookmarkFile"/>
             </a-form>
           </a-layout-content>
           <a-layout-footer style="text-align: center;height: 50px">
@@ -232,6 +207,7 @@
     </a-layout>
   </a-layout>
 
+  <!-- 编辑名称/地址的弹窗(type: 1面板 2分类 3链接) -->
   <a-modal v-model:visible="form.visible" @ok="handleOk" simple>
     <a-form :model="form">
       <a-form-item field="name" label="名称">
@@ -243,38 +219,32 @@
     </a-form>
   </a-modal>
 
-  <!--  <a-modal v-model:visible="settingsForm.visible" title="设置" @ok="handleSettingsFormOk" simple>
-      <a-form>
-        <a-textarea v-model="settingsForm.boxStr" :auto-size="{ minRows:20, maxRows:20 }"/>
-      </a-form>
-    </a-modal>-->
-
-  <!--  <a-drawer :width="340" v-model:visible="controlEditable" @ok="handleSettingsFormOk" unmountOnClose :mask="false" mask-closable="">
-      <template #title>
-        设置
-      </template>
-      <a-form>
-        <a-textarea v-model="settingsForm.boxStr" :auto-size="{ minRows:5, maxRows:10 }"/>
-      </a-form>
-    </a-drawer>-->
+  <!-- 书签导入预览弹窗:勾选要导入的面板 -->
+  <a-modal v-model:visible="importModalVisible" title="从书签文件导入" :width="440" @ok="confirmBookmarkImport">
+    <div class="import-preview-list">
+      <a-checkbox-group v-model="importSelection" direction="vertical">
+        <div v-for="(p, idx) in importPreviewPanels" :key="idx" class="import-preview-item">
+          <a-checkbox :value="String(idx)">
+            <span class="nowrap">{{ p.name }}</span>
+            <span class="import-preview-meta">{{ p.catCount }} 个分类 · {{ p.linkCount }} 条链接</span>
+          </a-checkbox>
+        </div>
+      </a-checkbox-group>
+    </div>
+    <div class="import-preview-tip">勾选需要导入的面板，导入后将追加到当前导航末尾。</div>
+  </a-modal>
 
 </template>
 
 <script setup>
-import {RouterLink, RouterView} from 'vue-router'
 import {ref, reactive, watch} from "vue";
 import draggable from 'vuedraggable';
 import {
   IconApps,
-  IconBug,
-  IconBulb,
-  IconSearch,
   IconDown,
   IconUp,
   IconPlus,
   IconClose,
-  IconRefresh,
-  IconEdit,
   IconGithub,
   IconImport,
   IconExport,
@@ -284,7 +254,9 @@ import {
 import {Message} from '@arco-design/web-vue';
 import defaultBox from './json/defaultBox.json'
 import defaultSearchToolbox from './json/defaultSearchToolbox.json'
+import defaultIcon from './icon.png'
 
+/** ---------------- 设置面板 / 编辑模式 ---------------- */
 let settingsForm = reactive({
   visible: false,
 });
@@ -292,71 +264,167 @@ let settingsForm = reactive({
 let cornerMenuPopupVisible = ref(false);
 let controlEditable = ref(false);
 
-let customBox = localStorage.getItem("customBox");
-let box = customBox ? reactive(JSON.parse(customBox)) : reactive(defaultBox);
-let boxStr = ref(JSON.stringify(box)); // 展示在设置内的json字符串
-let boxPreStr = boxStr.value; // 用于判断是否需要更新 防止watch死循环
+/** ---------------- 数据加载与持久化（带容错） ---------------- */
+const STORAGE_KEY = 'customBox';
 
-watch(box, (newVal, oldVal) => {
-  let tmp = JSON.stringify(newVal);
-  if (boxPreStr !== tmp) {
-    boxStr.value = tmp;
-    boxPreStr = tmp;
-    localStorage.setItem("customBox", tmp);
-  }
-})
+// 校验数据结构是否合法: [{ name, categories: [{ name, links: [{ name, url }] }] }]
+const isValidBox = (data) => {
+  if (!Array.isArray(data)) return false;
+  return data.every(panel =>
+      panel && typeof panel.name === 'string' && Array.isArray(panel.categories)
+      && panel.categories.every(category =>
+          category && typeof category.name === 'string' && Array.isArray(category.links)
+          && category.links.every(link =>
+              link && typeof link.name === 'string' && typeof link.url === 'string')));
+};
 
-watch(boxStr, (newVal, oldVal) => {
+// 深拷贝默认配置：避免编辑/重置时引用到 JSON 模块内的同一对象，把默认值也改掉（修复原版隐患）
+const cloneDefaultBox = () => JSON.parse(JSON.stringify(defaultBox));
+
+// 读取本地配置：解析失败或结构非法时回退为默认配置，保证应用永不因脏数据而白屏
+const loadInitialBox = () => {
   try {
-    if (boxPreStr !== newVal) {
-      // reactive 重新赋值
-      let newBox = JSON.parse(newVal);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return cloneDefaultBox();
+    const parsed = JSON.parse(raw);
+    if (!isValidBox(parsed)) throw new Error('数据结构不符合约定');
+    return parsed;
+  } catch (e) {
+    console.error('[iLink] 本地配置已损坏，已回退为默认配置:', e);
+    Message.error({content: '本地保存的导航配置已损坏，已自动恢复为默认配置', showIcon: true});
+    return cloneDefaultBox();
+  }
+};
+
+let box = reactive(loadInitialBox());
+let boxStr = ref(JSON.stringify(box, null, 2)); // 展示在设置内的json字符串（格式化缩进）
+let boxPreStr = JSON.stringify(box); // 双向同步防死循环的哨兵（紧凑格式）
+
+const persistBox = (compactStr) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, compactStr);
+  } catch (e) {
+    console.warn('[iLink] 配置写入 localStorage 失败:', e);
+    Message.warning({content: '配置保存失败（存储空间不足或处于隐私模式）', showIcon: true});
+  }
+};
+
+// box -> boxStr / localStorage
+watch(box, (newVal) => {
+  const compact = JSON.stringify(newVal);
+  if (boxPreStr !== compact) {
+    boxStr.value = JSON.stringify(newVal, null, 2);
+    boxPreStr = compact;
+    persistBox(compact);
+  }
+});
+
+// boxStr -> box（在设置里手工编辑 JSON）
+let lastJsonErrorAt = 0;
+watch(boxStr, (newVal) => {
+  try {
+    const parsed = JSON.parse(newVal);
+    if (!isValidBox(parsed)) {
+      throw new Error('结构需为 [{ name, categories: [{ name, links: [{ name, url }] }] }]');
+    }
+    const compact = JSON.stringify(parsed);
+    if (boxPreStr !== compact) {
       box.splice(0, box.length);
-      box.push(...newBox);
+      box.push(...parsed);
+      boxPreStr = compact;
+      persistBox(compact);
     }
   } catch (e) {
-    Message.error({content: `JSON配置解析失败`, showIcon: true});
+    // 手工输入过程中 JSON 处于中间态是正常的，节流提示避免每个按键都弹错
+    const now = Date.now();
+    if (now - lastJsonErrorAt > 2000) {
+      lastJsonErrorAt = now;
+      Message.error({content: `JSON 配置无效：${e.message}`, showIcon: true});
+    }
   }
-})
+});
 
+/** ---------------- 重置 / 导出 ---------------- */
 const resetBox = () => {
   box.splice(0, box.length);
-  box.push(...defaultBox);
-}
+  box.push(...cloneDefaultBox());
+  Message.success({content: '已重置为默认配置', showIcon: true});
+};
 
+// 把当前配置导出为 JSON 文件，作为手动备份手段
+const exportConfig = () => {
+  try {
+    const blob = new Blob([JSON.stringify(box, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ilink-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('[iLink] 配置导出失败:', e);
+    Message.error({content: '配置导出失败', showIcon: true});
+  }
+};
+
+/** ---------------- 搜索 ---------------- */
 let keywords = ref('');
 const searchToolbox = reactive(defaultSearchToolbox);
-let searchToolboxCollapsed = ref(true);
-
-/**
- * 'https://0x3.com/icon?host=' + getUrlHost(link.url)
- * 'https://api.iowen.cn/favicon/' + getUrlHost(link.url) + '.png'
- * https://api.yigekuang.cn/favicon/www.yigekuang.cn.png
- * https://ico.kucat.cn/get.php?url=https://网址/
- * @param url
- * @returns {string}
- */
-const getUrlHost = (url) => {
-  let host = /^http(s)?:\/\/(.*?)\//.exec(url);
-  if (host && host.length >= 2) {
-    return host[2];
-  }
-  return '';
-}
+const searchToolboxCollapsed = ref(true); // 修复：统一通过 .value 读写，避免 ref 被覆盖成普通值后丢失响应性
 
 const switchSearchPanel = () => {
-  searchToolboxCollapsed = !searchToolboxCollapsed
+  searchToolboxCollapsed.value = !searchToolboxCollapsed.value;
   searchToolbox.forEach((line) => {
     if (line.canBeCollapsed === undefined || line.canBeCollapsed) {
-      line.collapsed = searchToolboxCollapsed;
+      line.collapsed = searchToolboxCollapsed.value;
     }
-  })
-}
+  });
+};
 
 const goToSearch = (src) => {
-  window.open(src.replace('{q}', keywords.value));
-}
+  const q = (keywords.value || '').trim();
+  // 关键词做 URL 编码，避免空格、&、+ 等字符破坏搜索链接
+  window.open(src.replace('{q}', encodeURIComponent(q)));
+};
 
+/** ---------------- favicon ----------------
+ * 按顺序尝试多个公共 favicon 服务，全部失败时回退到内置图标。
+ * img 上通过 data-host / data-step 记录降级进度。
+ */
+const FAVICON_SERVICES = [
+  (host) => `https://0x3.com/icon?host=${host}`,
+  (host) => `https://ico.kucat.cn/get.php?url=https://${host}/`,
+];
+
+const getUrlHost = (url) => {
+  if (typeof url !== 'string') return '';
+  const matched = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/?#]+)/.exec(url.trim());
+  if (!matched) return '';
+  // 去掉用户信息与端口，仅保留主机名
+  return matched[1].replace(/.*@/, '').replace(/:\d+$/, '');
+};
+
+const getFaviconUrl = (url) => {
+  const host = getUrlHost(url);
+  return host ? FAVICON_SERVICES[0](host) : defaultIcon;
+};
+
+const onFaviconError = (e) => {
+  const img = e.target;
+  if (img.dataset.fallback === 'done') return; // 已降到内置图标，避免死循环
+  const step = Number(img.dataset.step || '0');
+  const host = img.dataset.host || '';
+  const next = step + 1;
+  if (host && next < FAVICON_SERVICES.length) {
+    img.dataset.step = String(next);
+    img.src = FAVICON_SERVICES[next](host);
+  } else {
+    img.dataset.fallback = 'done';
+    img.src = defaultIcon;
+  }
+};
+
+/** ---------------- 编辑：面板 / 分类 / 链接 ---------------- */
 let form = reactive({
   visible: false,
   name: '',
@@ -373,7 +441,7 @@ const goToUrl = (t, i, j, url) => {
   } else {
     promptLinkAt(t, i, j);
   }
-}
+};
 /** 操作面板 **/
 const promptTabAt = (t) => {
   form.type = 1;
@@ -465,14 +533,26 @@ const removeLinkAt = (t, i, j) => {
   box[t].categories[i].links.splice(j, 1);
 };
 const handleOk = () => {
+  if (!form.name.trim()) {
+    Message.warning({content: '名称不能为空', showIcon: true});
+    return;
+  }
   if (form.type === 3) {
+    if (!form.url.trim()) {
+      Message.warning({content: '地址不能为空', showIcon: true});
+      return;
+    }
+    // 没有协议头时自动补全 https://，避免 window.open 打开成相对路径
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(form.url.trim())) {
+      form.url = 'https://' + form.url.trim();
+    }
     submitLink();
   } else if (form.type === 2) {
     submitCategory();
   } else if (form.type === 1) {
     submitTab();
   } else {
-    Message.error({content: `未知的编辑类型`, showIcon: true});
+    Message.error({content: '未知的编辑类型', showIcon: true});
     form.visible = false;
   }
 };
@@ -482,101 +562,160 @@ const handleTabAdd = (t) => {
 };
 const handleTabDelete = (key) => {
   let arr = key.split('_')
-  removeCategoryAt(arr[0], arr[1]);
+  // 修复：key 是字符串，显式转成数字索引再删除
+  removeCategoryAt(Number(arr[0]), Number(arr[1]));
 };
 
-const file = ref(null)
-let bookmarkRoot = [];
-const importFromChrome = () => {
-  Message.warning({content: `建设中...`, showIcon: true});
-}
+/** ---------------- Chrome/浏览器书签导入（补完原半成品功能） ---------------- */
+const bookmarkFileInput = ref(null);
+const importModalVisible = ref(false);
+const importPreviewPanels = ref([]);
+const importSelection = ref([]);
 
+const triggerBookmarkImport = () => {
+  bookmarkFileInput.value && bookmarkFileInput.value.click();
+};
 
-const readFile = () => {
-  let f = file.value.files[0];
+const readBookmarkFile = (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = ''; // 重置以便可以重复选择同一文件
+  if (!f) return;
   const reader = new FileReader();
-  reader.onload = parseHtml;
-  reader.onerror = (err) => console.log(err);
+  reader.onload = (ev) => handleBookmarkHtml(String(ev.target.result));
+  reader.onerror = () => Message.error({content: '文件读取失败', showIcon: true});
   reader.readAsText(f);
-}
+};
 
-const parseHtml = (e) => {
-  let parser = new DOMParser()
-  let doc = parser.parseFromString(e.target.result, 'text/html')
-  parse(doc.querySelector('dl').querySelector('dt').querySelector('dl').children, bookmarkRoot)
-
-
-  for (let t1 of bookmarkRoot) {
-    if (t1 !== undefined && t1.name.indexOf("───") <= 0) {
-      const categories = []
-      box.push({
-        name: t1.name,
-        categories: categories
-      })
-      if (t1.children !== undefined) {
-        let y = 0;
-        for (let j = 0; j < t1.children.length; j++) {
-          let t2 = t1.children[j]
-          if (t2 !== undefined && !t2.name.indexOf("───") <= 0) {
-            const links = []
-            const h = t2.children === undefined ? 4 : t2.children.length; // 高
-            categories.push({
-              name: t2.name,
-              links: links
-            })
-            y += h;
-            if (t2.children !== undefined) {
-              for (let t3 of t2.children) {
-                if (t3 !== undefined && !t3.name.indexOf("───") <= 0) {
-                  links.push({
-                    name: t3.name,
-                    url: t3.url
-                  })
-                }
-              }
-            }
-          }
-        }
+// 递归解析 Netscape 书签格式（DT/DL/H3/A 结构）
+const parseBookmarkTree = (nodes, list) => {
+  for (const node of nodes) {
+    if (!node.tagName || node.tagName.toLowerCase() !== 'dt') continue;
+    let name = null;
+    let childDl = null;
+    for (const child of node.children) {
+      const tag = child.tagName.toLowerCase();
+      if (tag === 'h3') {
+        // 文件夹：h3 为文件夹名
+        name = (child.textContent || '').trim();
+      } else if (tag === 'dl') {
+        // 文件夹：dl 为子节点容器
+        childDl = child;
+      } else if (tag === 'a') {
+        // 链接节点
+        list.push({
+          name: (child.textContent || '').trim(),
+          url: child.getAttribute('href') || ''
+        });
       }
     }
-  }
-};
-const parse = (dtList, bookmarkList) => {
-  for (let dt of dtList) {
-    if (dt.tagName.toLowerCase() === 'dt') {
-      let name, dtChildrenList
-      for (let o of dt.children) {
-        let tagName = o.tagName.toLowerCase()
-        if (tagName === 'h3') {
-          // 文件夹： h3 文件夹名
-          name = o.innerText
-        } else if (tagName === 'dl') {
-          // 文件夹： dl 更多子节点
-          dtChildrenList = o.children
-        } else if (tagName === 'a') {
-          // 链接： a 链接
-          bookmarkList.push({
-            name: o.innerText,
-            url: o.href
-          })
-        }
-      }
-      // 文件夹继续递归
-      if (name !== null && dtChildrenList != null) {
-        let children = []
-        bookmarkList.push({
-          name: name,
-          children: children
-        })
-        parse(dtChildrenList, children)
-      }
+    // 文件夹继续递归
+    if (name !== null && childDl !== null) {
+      const children = [];
+      list.push({name, children});
+      parseBookmarkTree(childDl.children, children);
     }
   }
 };
 
+// 分割线文件夹（纯符号命名的节点）直接跳过
+const isSeparator = (node) => /^[-─━=—_·\s]*$/.test(node.name || '');
+
+// 收集某个文件夹下的全部链接（更深层子文件夹拍平合并）
+const collectLinks = (nodes) => {
+  const links = [];
+  for (const node of nodes) {
+    if (isSeparator(node)) continue;
+    if (node.url) {
+      links.push({name: node.name, url: node.url});
+    } else if (Array.isArray(node.children)) {
+      links.push(...collectLinks(node.children));
+    }
+  }
+  return links;
+};
+
+// 把书签树转换为导航面板结构：
+// 一级文件夹 -> 面板，二级文件夹 -> 分类，更深层内容拍平为链接
+const buildPanelsFromBookmarkTree = (tree) => {
+  // 典型浏览器导出：根下第一个节点是“书签栏”等大文件夹，其子项才是用户整理的内容
+  let roots = tree;
+  const firstFolder = tree.find((n) => Array.isArray(n.children) && n.children.length);
+  if (firstFolder && tree.every((n) => !n.url)) {
+    roots = [...firstFolder.children, ...tree.filter((n) => n !== firstFolder)];
+  }
+
+  const panels = [];
+  const looseLinks = [];
+  for (const node of roots) {
+    if (isSeparator(node)) continue;
+    if (Array.isArray(node.children)) {
+      const categories = [];
+      const directLinks = [];
+      for (const child of node.children) {
+        if (isSeparator(child)) continue;
+        if (Array.isArray(child.children)) {
+          const links = collectLinks(child.children);
+          if (links.length) categories.push({name: child.name, links});
+        } else if (child.url) {
+          directLinks.push({name: child.name, url: child.url});
+        }
+      }
+      // 文件夹下未分组的散链接单独归为一个分类
+      if (directLinks.length) categories.unshift({name: '常用', links: directLinks});
+      if (categories.length) panels.push({name: node.name, categories});
+    } else if (node.url) {
+      looseLinks.push({name: node.name, url: node.url});
+    }
+  }
+  // 根级散链接归入一个“导入的书签”面板
+  if (looseLinks.length) {
+    panels.unshift({name: '导入的书签', categories: [{name: '未分类', links: looseLinks}]});
+  }
+  return panels;
+};
+
+const handleBookmarkHtml = (html) => {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const rootDl = doc.querySelector('dl');
+    if (!rootDl) throw new Error('不是有效的书签导出文件（Netscape 格式）');
+    const tree = [];
+    parseBookmarkTree(rootDl.children, tree);
+    const panels = buildPanelsFromBookmarkTree(tree);
+    if (!panels.length) throw new Error('未能从书签文件中解析出文件夹或链接');
+    importPreviewPanels.value = panels.map((p) => ({
+      name: p.name,
+      categories: p.categories,
+      catCount: p.categories.length,
+      linkCount: p.categories.reduce((n, c) => n + c.links.length, 0),
+    }));
+    // 默认全选
+    importSelection.value = importPreviewPanels.value.map((_, idx) => String(idx));
+    importModalVisible.value = true;
+  } catch (e) {
+    Message.error({content: `书签解析失败：${e.message}`, showIcon: true});
+  }
+};
+
+const confirmBookmarkImport = () => {
+  const chosen = importPreviewPanels.value.filter((_, idx) => importSelection.value.includes(String(idx)));
+  const valid = chosen.filter((p) => p.linkCount > 0);
+  if (!valid.length) {
+    Message.warning({content: '请至少勾选一个包含链接的面板', showIcon: true});
+    return;
+  }
+  box.push(...valid.map(({name, categories}) => ({name, categories})));
+  importModalVisible.value = false;
+  Message.success({
+    content: `已导入 ${valid.length} 个面板、共 ${valid.reduce((n, p) => n + p.linkCount, 0)} 条链接`,
+    showIcon: true
+  });
+};
+
+/** ---------------- 角落菜单 / 设置面板 ---------------- */
 const cornerMenuClick = (key, openKeys) => {
   if (key === '1') {
-    window.open('https://github.com/bestop/gugu-portal');
+    window.open('https://github.com/bestop/ilink');
   } else if (key === '2') {
     switchSettingsPanel();
   } else {
@@ -584,7 +723,6 @@ const cornerMenuClick = (key, openKeys) => {
   }
   cornerMenuPopupVisible.value = !cornerMenuPopupVisible.value; // 点击后立马消失
 }
-
 
 const switchSettingsPanel = () => {
   if (controlEditable.value) {
@@ -597,66 +735,5 @@ const switchSettingsPanel = () => {
       settingsForm.visible = !settingsForm.visible;
     }, 300);
   }
-
 }
-
-
 </script>
-
-<style>
-/*.menu-demo {
-  height: 600px;
-  padding: 40px;
-  box-sizing: border-box;
-  !*background-color: var(--color-neutral-2);*!
-  float: left;
-  position: fixed;
-  z-index: 999;
-}
-
-.menu-demo .arco-menu {
-  width: 200px;
-  height: 100%;
-  box-shadow: 0 0 1px rgba(0, 0, 0, 0.3);
-}
-
-.menu-demo .arco-menu :deep(.arco-menu-collapse-button) {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-}
-
-.menu-demo .arco-menu:not(.arco-menu-collapsed) :deep(.arco-menu-collapse-button) {
-  right: 0;
-  bottom: 8px;
-  transform: translateX(50%);
-}
-
-.menu-demo .arco-menu:not(.arco-menu-collapsed)::before {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 48px;
-  height: 48px;
-  background-color: inherit;
-  border-radius: 50%;
-  box-shadow: -4px 0 2px var(--color-bg-2), 0 0 1px rgba(0, 0, 0, 0.3);
-  transform: translateX(50%);
-}
-
-.menu-demo .arco-menu.arco-menu-collapsed {
-  width: 48px;
-  height: auto;
-  padding-top: 24px;
-  padding-bottom: 138px;
-  border-radius: 22px;
-}
-
-.menu-demo .arco-menu.arco-menu-collapsed :deep(.arco-menu-collapse-button) {
-  right: 8px;
-  bottom: 8px;
-}*/
-
-
-</style>

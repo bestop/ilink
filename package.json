@@ -1,6 +1,7 @@
 {
-  "name": "gugu-portal",
-  "version": "0.0.0",
+  "name": "ilink",
+  "version": "1.0.0",
+  "description": "iLink - 一个简洁的无后端静态导航站点（个人书签页）",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -9,9 +10,7 @@
   },
   "dependencies": {
     "normalize.css": "^8.0.1",
-    "pinia": "^2.0.28",
     "vue": "^3.2.45",
-    "vue-router": "^4.1.6",
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
@@ -20,5 +19,8 @@
     "unplugin-auto-import": "^0.13.0",
     "unplugin-vue-components": "^0.23.0",
     "vite": "^4.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.16.17": true
   }
 }

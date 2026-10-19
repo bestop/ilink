@@ -235,7 +235,7 @@ li {
 }
 
 .button-trigger-settings {
-    right: 420px; !important;
+    right: 420px !important;
 }
 
 .button-trigger.button-trigger-active {
@@ -262,4 +262,27 @@ li {
 /* 强制换行 */
 .json-textbox .arco-textarea {
     word-break: break-all;
+}
+
+/** ------------- 书签导入预览弹窗 ------------ **/
+
+.import-preview-list {
+    max-height: 320px;
+    overflow: auto;
+}
+
+.import-preview-item {
+    padding: 4px 0;
+}
+
+.import-preview-meta {
+    color: var(--color-neutral-6);
+    font-size: 12px;
+    margin-left: 6px;
+}
+
+.import-preview-tip {
+    margin-top: 8px;
+    color: var(--color-neutral-6);
+    font-size: 12px;
 }
