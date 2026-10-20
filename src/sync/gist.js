@@ -12,18 +12,24 @@
 
 const GIST_FILENAME = 'ilink-config.json';
 const GIST_DESCRIPTION = 'iLink 导航配置云端同步（由 iLink 自动管理，请勿手工编辑）';
-const SCHEMA_VERSION = 1;
+// schema 2：载荷新增可选 searchToolbox（搜索站配置）。parsePayload 不校验该字段：
+// 旧客户端读到新载荷只忽略多出字段，新客户端读到旧载荷（无该字段）则保持本机搜索站不变，双向兼容。
+const SCHEMA_VERSION = 2;
 
 /**
- * 构造云端存储的完整载荷：box 外包一层元信息，用于多设备冲突判断
+ * 构造云端存储的完整载荷：box + searchToolbox 外包一层元信息，用于多设备冲突判断
  */
-export const buildPayload = (box, deviceName) => ({
-  app: 'ilink',
-  schema: SCHEMA_VERSION,
-  updatedAt: Date.now(),
-  device: deviceName || '未知设备',
-  box: JSON.parse(JSON.stringify(box)),
-});
+export const buildPayload = (box, deviceName, searchToolbox = null) => {
+  const payload = {
+    app: 'ilink',
+    schema: SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    device: deviceName || '未知设备',
+    box: JSON.parse(JSON.stringify(box)),
+  };
+  if (searchToolbox) payload.searchToolbox = JSON.parse(JSON.stringify(searchToolbox));
+  return payload;
+};
 
 /**
  * 校验云端载荷并返回；格式不符时抛出可读错误
@@ -78,12 +84,12 @@ const gistRequest = async (token, path, options = {}) => {
 /**
  * 创建私密 Gist 并写入当前配置，返回 gist id（首次连接且未填 Gist ID 时调用）
  */
-export const createConfigGist = async (token, box, deviceName) => {
+export const createConfigGist = async (token, box, deviceName, searchToolbox = null) => {
   const body = {
     description: GIST_DESCRIPTION,
     public: false,
     files: {
-      [GIST_FILENAME]: {content: JSON.stringify(buildPayload(box, deviceName), null, 2)},
+      [GIST_FILENAME]: {content: JSON.stringify(buildPayload(box, deviceName, searchToolbox), null, 2)},
     },
   };
   const gist = await gistRequest(token, '/gists', {method: 'POST', body: JSON.stringify(body)});
@@ -106,10 +112,10 @@ export const fetchConfig = async (token, gistId) => {
 /**
  * 上传配置（整体覆盖云端同名文件）
  */
-export const updateConfig = async (token, gistId, box, deviceName) => {
+export const updateConfig = async (token, gistId, box, deviceName, searchToolbox = null) => {
   const body = {
     files: {
-      [GIST_FILENAME]: {content: JSON.stringify(buildPayload(box, deviceName), null, 2)},
+      [GIST_FILENAME]: {content: JSON.stringify(buildPayload(box, deviceName, searchToolbox), null, 2)},
     },
   };
   await gistRequest(token, `/gists/${gistId}`, {method: 'PATCH', body: JSON.stringify(body)});

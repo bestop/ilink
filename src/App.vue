@@ -294,6 +294,7 @@
     <!-- 已连接：状态展示 + 手动操作 -->
     <template v-if="syncConnected">
       <div class="sync-meta-row"><span class="sync-meta-label">存储位置</span><span>私密 Gist（保存在你自己的 GitHub 账号中）</span></div>
+      <div class="sync-meta-row"><span class="sync-meta-label">同步范围</span><span>导航面板 + 搜索站配置</span></div>
       <div class="sync-meta-row"><span class="sync-meta-label">本机设备名</span><span>{{ syncSettings.deviceName || '未命名设备' }}</span></div>
       <div class="sync-meta-row"><span class="sync-meta-label">上次同步</span><span>{{ formatTime(syncSettings.lastSyncAt) }}</span></div>
       <div class="sync-meta-row">
@@ -335,7 +336,7 @@
     <!-- 未连接：连接表单 -->
     <template v-else>
       <div class="sync-tip">
-        配置将保存到你自己 GitHub 账号下的<b>私密 Gist</b>，多台设备登录后即可共享同一份导航配置，全程不经过任何第三方服务器。
+        配置将保存到你自己 GitHub 账号下的<b>私密 Gist</b>，多台设备登录后即可共享同一份导航与搜索站配置，全程不经过任何第三方服务器。
       </div>
       <a-form :model="syncForm" layout="vertical">
         <a-form-item field="token" label="GitHub 访问令牌（必填）">
@@ -620,9 +621,23 @@ const applyCloudToLocal = (payload, {silent = false} = {}) => {
   setTimeout(() => { suppressAutoPush = false; }, AUTO_PUSH_DELAY + 500);
   const incoming = payload.box.map((p) => JSON.parse(JSON.stringify(p)));
   box.splice(0, box.length, ...incoming);
+  // 云端载荷含搜索站配置时一并应用（旧版本载荷无此字段，保持本机搜索站不动）；
+  // 折叠态按分组名沿用本机当前状态，新分组用默认推导，避免同步覆盖本机展开/收起偏好
+  if (Array.isArray(payload.searchToolbox) && isValidSearchToolbox(payload.searchToolbox)) {
+    const prevCollapsedByName = new Map(searchToolbox.map((line) => [line.name, line.collapsed]));
+    const incomingSearch = payload.searchToolbox.map((line) => {
+      const clean = {name: line.name, sites: line.sites.map(({name, src}) => ({name, src}))};
+      if (line.canBeCollapsed === false) clean.canBeCollapsed = false;
+      clean.collapsed = prevCollapsedByName.has(line.name)
+          ? !!prevCollapsedByName.get(line.name)
+          : line.canBeCollapsed === false ? false : true;
+      return clean;
+    });
+    searchToolbox.splice(0, searchToolbox.length, ...incomingSearch);
+  }
   syncSettings.lastCloudUpdatedAt = payload.updatedAt || 0;
   syncSettings.lastSyncAt = Date.now();
-  syncSettings.lastLocalState = JSON.stringify(box);
+  syncSettings.lastLocalState = localSyncSnapshot();
   if (!silent) Message.success({content: '已应用云端配置', showIcon: true});
 };
 
@@ -631,10 +646,10 @@ const pushToCloud = async (silent = false) => {
   if (!syncConnected.value || syncBusy.value) return;
   syncBusy.value = true;
   try {
-    await updateConfig(syncSettings.token, syncSettings.gistId, box, syncSettings.deviceName);
+    await updateConfig(syncSettings.token, syncSettings.gistId, box, syncSettings.deviceName, JSON.parse(localSyncSearchStr()));
     syncSettings.lastCloudUpdatedAt = Date.now();
     syncSettings.lastSyncAt = Date.now();
-    syncSettings.lastLocalState = JSON.stringify(box);
+    syncSettings.lastLocalState = localSyncSnapshot();
     if (!silent) Message.success({content: '已上传到云端（覆盖云端配置）', showIcon: true});
   } catch (e) {
     console.error('[iLink] 云端上传失败:', e);
@@ -656,7 +671,7 @@ const pullFromCloud = async () => {
     }
     Modal.confirm({
       title: '从云端拉取配置',
-      content: `将用云端配置（${formatTime(payload.updatedAt)} 由 ${payload.device || '未知设备'} 更新）覆盖本机当前配置，是否继续？`,
+      content: `将用云端配置（${formatTime(payload.updatedAt)} 由 ${payload.device || '未知设备'} 更新）覆盖本机的导航与搜索站配置，是否继续？`,
       okText: '覆盖本机',
       cancelText: '取消',
       onOk: () => applyCloudToLocal(payload),
@@ -679,7 +694,7 @@ const startupSyncCheck = async () => {
       return;
     }
     const cloudNewer = (payload.updatedAt || 0) > (syncSettings.lastCloudUpdatedAt || 0);
-    const localDirty = JSON.stringify(box) !== (syncSettings.lastLocalState || '');
+    const localDirty = localSyncSnapshot() !== (syncSettings.lastLocalState || '');
     if (cloudNewer && !localDirty) {
       applyCloudToLocal(payload, {silent: true});
       Message.success({content: `已自动同步云端配置（来自 ${payload.device || '其他设备'}）`, showIcon: true});
@@ -715,9 +730,9 @@ const connectSync = async () => {
     let first = {payload: null, gistHtmlUrl: ''};
     if (gistId) {
       first = await fetchConfig(token, gistId); // 同时完成令牌与 Gist ID 的有效性校验
-      if (!first.payload) await updateConfig(token, gistId, box, deviceName); // Gist 为空：先上传本机
+      if (!first.payload) await updateConfig(token, gistId, box, deviceName, JSON.parse(localSyncSearchStr())); // Gist 为空：先上传本机
     } else {
-      gistId = await createConfigGist(token, box, deviceName);
+      gistId = await createConfigGist(token, box, deviceName, JSON.parse(localSyncSearchStr()));
       first = await fetchConfig(token, gistId);
     }
     const finish = (payload) => {
@@ -728,12 +743,15 @@ const connectSync = async () => {
       syncSettings.autoSync = true;
       syncSettings.lastCloudUpdatedAt = payload ? (payload.updatedAt || Date.now()) : Date.now();
       syncSettings.lastSyncAt = Date.now();
-      syncSettings.lastLocalState = JSON.stringify(box);
+      syncSettings.lastLocalState = localSyncSnapshot();
       syncModalVisible.value = false;
-      Message.success({content: '云端同步已开启，多设备将共享同一份配置', showIcon: true});
+      Message.success({content: '云端同步已开启，多设备将共享同一份导航与搜索站配置', showIcon: true});
     };
+    // 云端与本机是否一致：导航与搜索站任一不同即视为已有不同配置（旧载荷无搜索站字段时不误判）
+    const cloudSame = (p) => p && JSON.stringify(p.box) === JSON.stringify(box)
+        && (!Array.isArray(p.searchToolbox) || JSON.stringify(p.searchToolbox) === localSyncSearchStr());
     const cloudContent = first.payload ? JSON.stringify(first.payload.box) : '';
-    if (cloudContent && cloudContent !== JSON.stringify(box)) {
+    if (cloudContent && !cloudSame(first.payload)) {
       Modal.confirm({
         title: '检测到云端已有配置',
         content: `云端配置更新于 ${formatTime(first.payload.updatedAt)}（来源 ${first.payload.device || '未知设备'}）。使用哪一份？`,
@@ -744,7 +762,7 @@ const connectSync = async () => {
           finish(first.payload);
         },
         onCancel: () => {
-          updateConfig(token, gistId, box, deviceName)
+          updateConfig(token, gistId, box, deviceName, JSON.parse(localSyncSearchStr()))
               .then(() => finish(null))
               .catch((err) => Message.error({content: `上传失败：${err.message}`, showIcon: true}));
         },
@@ -861,10 +879,39 @@ const loadInitialSearchToolbox = () => {
 const searchToolbox = reactive(loadInitialSearchToolbox());
 const searchToolboxCollapsed = ref(true); // 修复：统一通过 .value 读写，避免 ref 被覆盖成普通值后丢失响应性
 
+/**
+ * 本机同步快照（导航 box + 搜索站配置的复合 JSON）：
+ * - 用于「本机是否有未同步修改」的脏检测，以及同步成功后记录基线；
+ * - searchToolbox 剥离 collapsed —— 展开折叠是本机 UI 偏好，不参与跨设备同步，
+ *   应用云端配置时按分组名保留本机已展开/收起状态（见 applyCloudToLocal）。
+ */
+const localSyncSearchStr = () => JSON.stringify(
+    searchToolbox.map(({collapsed, ...rest}) => JSON.parse(JSON.stringify(rest))));
+
+const localSyncSnapshot = () => JSON.stringify({
+  box: JSON.parse(JSON.stringify(box)),
+  searchToolbox: JSON.parse(localSyncSearchStr()),
+});
+
+// 兼容升级（v1.5.0 及以前 lastLocalState 只含 box）：若旧快照与当前 box 一致，
+// 视为「本机无修改」，原地迁移为复合快照，避免升级后首次启动误判脏数据而触发多余上传/冲突弹窗
+if (syncSettings.lastLocalState && syncSettings.lastLocalState === JSON.stringify(box)) {
+  syncSettings.lastLocalState = localSyncSnapshot();
+}
+
+// 搜索站内容签名基线：仅当站点/分组内容变化时才触发云同步；
+// collapsed（展开/收起）属于本机 UI 状态，只写 localStorage，绝不能触发云端上传
+let lastSearchSyncStr = localSyncSearchStr();
+
 watch(searchToolbox, (newVal) => {
   try {
     localStorage.setItem(SEARCH_KEY, JSON.stringify(newVal));
   } catch (e) { /* 隐私模式/配额不足时静默放弃，会话内仍可正常编辑 */ }
+  const cur = localSyncSearchStr();
+  if (cur !== lastSearchSyncStr) {
+    lastSearchSyncStr = cur;
+    markLocalEdited(); // 内容有变：3s 防抖自动上传（未连接云端时为 no-op）
+  }
 });
 
 const switchSearchPanel = () => {
