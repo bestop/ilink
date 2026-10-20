@@ -66,8 +66,8 @@
                          @click.middle="goToSearch(site.src)">
                         <img class="search-line-li-a-img" alt=""
                              :key="site.src"
-                             :src="getFaviconUrl(site.src)"
                              :data-host="getUrlHost(site.src)"
+                             decoding="async"
                              @vue:mounted="onFaviconMount"
                              @load="onFaviconLoad"
                              @error="onFaviconError">
@@ -110,6 +110,7 @@
 
                   <a-tabs type="card" size="medium" :editable="controlEditable" :show-add-button="controlEditable"
                           @add="handleTabAdd(t)" @delete="handleTabDelete"
+                          lazy-load
                           auto-switch>
                     <a-tab-pane v-for="(category, i) in tab.categories" :key="t + '_' + i" :title="category.name">
                       <draggable tag="ul" :list="category.links" class="list-group" :animation="100"
@@ -120,8 +121,8 @@
                             <div class="link-chip">
                               <img class="link-chip-image" alt=""
                                    :key="link.url"
-                                   :src="getFaviconUrl(link.url)"
                                    :data-host="getUrlHost(link.url)"
+                                   decoding="async"
                                    @vue:mounted="onFaviconMount"
                                    @load="onFaviconLoad"
                                    @error="onFaviconError">
@@ -808,7 +809,11 @@ const goToSearch = (src) => {
 /** ---------------- favicon ----------------
  * 图标自动匹配：对全部 504 个域名实测后按命中率排定的服务链（kucat 85% → 目标站直连 49% → 0x3 84%），
  * 联合覆盖 97%；全部失败时回退到内置图标。img 上通过 data-host / data-step / data-fallback 记录降级进度。
- * 每级 8 秒超时：服务挂起时（不触发 error）自动降级，避免图标长时间空白；
+ * host→图标 解析缓存（内存 + localStorage）：同一域名多张图去重请求；
+ * 二次访问直接用已解析 URL，零三方请求；缓存失效自愈（error 时逐出并从链首重试）。
+ * 并发队列（8 路）：首屏上百个图标若同时发起会触发图标服务限流（实测洪峰下大量请求被挂起），
+ * src 在出队时才赋值（真正发起请求），8 秒超时也从真正请求时起算；
+ * 队列等待期间缓存被同域任务填充时，出队重查缓存可直接复用。
  * load 时清理计时器，并对 8px 以下无效占位图继续降级。
  */
 const FAVICON_SERVICES = [
@@ -817,7 +822,34 @@ const FAVICON_SERVICES = [
   (host) => `https://0x3.com/icon?host=${host}`,
 ];
 const FAVICON_TIMEOUT = 8000;
+const FAVICON_CONCURRENCY = 8;
+const FAVICON_CACHE_KEY = 'ilink-favicon-cache-v1'; // 改动服务链时 bump 版本号以自动失效旧缓存
+const FAVICON_CACHE_MAX = 800;
 const faviconTimers = new WeakMap(); // img element -> 超时计时器
+const faviconHostCache = (() => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVICON_CACHE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+})();
+
+let faviconCacheSyncTimer = null;
+// 防抖持久化：图标成批加载，避免每个 load 都写一次 localStorage；超量时丢弃最早写入的条目
+const persistFaviconCache = () => {
+  if (faviconCacheSyncTimer) return;
+  faviconCacheSyncTimer = setTimeout(() => {
+    faviconCacheSyncTimer = null;
+    try {
+      const keys = Object.keys(faviconHostCache);
+      for (const k of keys.slice(0, Math.max(0, keys.length - FAVICON_CACHE_MAX))) {
+        delete faviconHostCache[k];
+      }
+      localStorage.setItem(FAVICON_CACHE_KEY, JSON.stringify(faviconHostCache));
+    } catch (e) { /* 隐私模式/配额不足时静默放弃，仅内存缓存仍然生效 */ }
+  }, 2000);
+};
 
 const getUrlHost = (url) => {
   if (typeof url !== 'string') return '';
@@ -825,11 +857,6 @@ const getUrlHost = (url) => {
   if (!matched) return '';
   // 去掉用户信息与端口，仅保留主机名
   return matched[1].replace(/.*@/, '').replace(/:\d+$/, '');
-};
-
-const getFaviconUrl = (url) => {
-  const host = getUrlHost(url);
-  return host ? FAVICON_SERVICES[0](host) : defaultIcon;
 };
 
 const clearFaviconTimer = (img) => {
@@ -844,41 +871,94 @@ const armFaviconTimer = (img) => {
   clearFaviconTimer(img);
   faviconTimers.set(img, setTimeout(() => {
     faviconTimers.delete(img);
-    if (img.dataset.fallback !== 'done') advanceFavicon(img);
+    if (img.dataset.active === '1') { // 请求仍在进行：超时降级（服务挂起时不触发 error，靠这里收尾）
+      finishFaviconAttempt(img);
+      advanceFavicon(img);
+    }
   }, FAVICON_TIMEOUT));
 };
 
-// img 挂载时重置降级状态并启动第一级超时（配合 :key 保证换链接时状态干净）
+/** ---------------- 图标并发队列 ---------------- */
+const faviconQueue = []; // 待发起的解析任务 {img, host, step}
+let faviconActiveCount = 0;
+
+const pumpFaviconQueue = () => {
+  while (faviconActiveCount < FAVICON_CONCURRENCY && faviconQueue.length) {
+    const job = faviconQueue.shift();
+    const img = job.img;
+    // 任务排队期间可能已降级完成/被卸载，直接丢弃（不占槽位）
+    if (!img.isConnected || img.dataset.fallback === 'done') continue;
+    faviconActiveCount++;
+    img.dataset.active = '1';
+    img.dataset.step = String(job.step);
+    // 出队时重查缓存：排队期间同域图标可能已被其他任务解析成功
+    img.src = faviconHostCache[job.host] || FAVICON_SERVICES[Math.max(0, job.step)](job.host);
+    armFaviconTimer(img);
+  }
+};
+
+const scheduleFavicon = (img, host, step) => {
+  faviconQueue.push({img, host, step});
+  pumpFaviconQueue();
+};
+
+// 结束当前尝试（成功/失败/超时）：释放并发槽位并停表
+const finishFaviconAttempt = (img) => {
+  clearFaviconTimer(img);
+  if (img.dataset.active === '1') {
+    delete img.dataset.active;
+    faviconActiveCount--;
+  }
+};
+
+// img 挂载时入队首个解析任务（配合 :key 保证换链接时状态干净）
 // 注意 @vue:mounted 传入的是 vnode（元素在 .el 上），而 @load/@error 传入的是原生事件对象
 const onFaviconMount = (vnode) => {
   const img = (vnode && vnode.el) || vnode;
   if (!(img instanceof Element) || !img.dataset || !img.dataset.host) return;
-  img.dataset.step = '0';
   delete img.dataset.fallback;
-  armFaviconTimer(img);
+  // 命中缓存时 step=-1：缓存 URL 出错时应从链首重试而非跳级（advance 后落回 0）
+  const host = img.dataset.host;
+  scheduleFavicon(img, host, faviconHostCache[host] ? -1 : 0);
 };
 
 const onFaviconLoad = (e) => {
   const img = e.target;
-  clearFaviconTimer(img);
+  finishFaviconAttempt(img);
+  if (img.dataset.fallback === 'done') return;
   // 尺寸异常（如 1x1 占位图）视为无效，继续降级；naturalWidth 为 0 时尚未完成解码，放行
-  if (img.dataset.fallback !== 'done' && img.naturalWidth > 0 && img.naturalWidth < 8) {
+  if (img.naturalWidth > 0 && img.naturalWidth < 8) {
     advanceFavicon(img);
+    return;
+  }
+  // 记录解析成功的图标：兜底图不入缓存（避免瞬时网络故障把好域名永久标灰）
+  const host = img.dataset.host;
+  if (host && img.src && faviconHostCache[host] !== img.src) {
+    faviconHostCache[host] = img.src;
+    persistFaviconCache();
   }
 };
 
-const onFaviconError = (e) => advanceFavicon(e.target);
+const onFaviconError = (e) => {
+  const img = e.target;
+  finishFaviconAttempt(img);
+  // 缓存的 URL 自身失效：逐出缓存，改走完整服务链重新解析
+  const host = img.dataset.host;
+  if (host && faviconHostCache[host] && img.src === faviconHostCache[host]) {
+    delete faviconHostCache[host];
+    persistFaviconCache();
+  }
+  advanceFavicon(img);
+};
 
 const advanceFavicon = (img) => {
-  const next = Number(img.dataset.step || '0') + 1;
+  if (img.dataset.fallback === 'done') return;
   const host = img.dataset.host || '';
+  const next = Number(img.dataset.step || '0') + 1;
   if (host && next < FAVICON_SERVICES.length) {
-    img.dataset.step = String(next);
-    img.src = FAVICON_SERVICES[next](host);
-    armFaviconTimer(img);
+    scheduleFavicon(img, host, next);
   } else {
     img.dataset.fallback = 'done';
-    clearFaviconTimer(img);
     img.src = defaultIcon;
   }
 };
