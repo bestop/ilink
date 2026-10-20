@@ -432,6 +432,82 @@ body .arco-input-search .arco-input-icon-hover:hover::before {
   flex-shrink: 0;
 }
 
+/* 搜索区编辑模式（仅在设置开启时渲染）：站点悬浮编辑/删除按钮 */
+.search-line-li {
+  position: relative;
+}
+
+.search-line-li-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 9px;
+  background: var(--ilink-surface);
+  border: 1px solid var(--ilink-border);
+  box-shadow: var(--ilink-shadow-rest);
+  opacity: 0;
+  transition: opacity var(--ilink-dur) var(--ilink-ease);
+  z-index: 2;
+}
+
+.search-line-li:hover .search-line-li-btn {
+  opacity: 1;
+}
+
+.search-line-li-btn .iconfont {
+  font-size: 12px;
+  color: var(--ilink-text-3);
+  transition: color var(--ilink-dur) var(--ilink-ease);
+}
+
+.search-line-li-btn .iconfont:hover {
+  color: var(--ilink-primary);
+}
+
+/* 分组标题编辑态：纵向布局后接重命名/删除小钮，隐藏分隔竖线 */
+.search-line-title.editing {
+  flex: 0 0 auto;
+  max-width: 140px;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.search-line-title.editing::after {
+  display: none;
+}
+
+.search-line-title-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.search-line-title-btns .iconfont {
+  font-size: 12px;
+  color: var(--ilink-text-3);
+  transition: color var(--ilink-dur) var(--ilink-ease);
+}
+
+.search-line-title-btns .iconfont:hover {
+  color: var(--ilink-primary);
+}
+
+/* ➕ 添加站点占位（与站点图标同尺寸对齐） */
+.search-line-add {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* 折叠按钮：更轻的幽灵圆钮 */
 .search-bottom {
   margin-top: 4px;
@@ -967,6 +1043,16 @@ body .json-textbox .arco-textarea {
   .search-line-title {
     flex: 0 0 64px;
     max-width: 64px;
+  }
+
+  /* 触屏无 hover：编辑钮常显（仅编辑模式存在 DOM） */
+  .search-line-title.editing {
+    flex: 0 0 auto;
+    max-width: 140px;
+  }
+
+  .search-line-li-btn {
+    opacity: 1;
   }
 
   .search-line-title::after {

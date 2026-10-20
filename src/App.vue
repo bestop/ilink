@@ -57,11 +57,17 @@
             </a-space>
 
             <div class="search-panel">
-              <div v-for="line in searchToolbox" :key="line.name">
+              <div v-for="(line, t) in searchToolbox" :key="t + '-' + line.name">
                 <div :class="{'search-line': true, 'no-visible': line.collapsed}">
-                  <div class="search-line-title"><span class="nowrap">{{ line.name }}</span></div>
+                  <div :class="{'search-line-title': true, 'editing': controlEditable}">
+                    <span class="nowrap">{{ line.name }}</span>
+                    <span class="search-line-title-btns" v-if="controlEditable">
+                      <i class="iconfont cursor-pointer icon-bianji" title="重命名分组" @click="promptSearchGroupAt(t)"></i>
+                      <i class="iconfont cursor-pointer icon-chacha" title="删除分组" @click="removeSearchGroupAt(t)"></i>
+                    </span>
+                  </div>
                   <ul class="search-line-ul">
-                    <li class="search-line-li" v-for="site in line.sites" :key="site.name + site.src">
+                    <li class="search-line-li" v-for="(site, j) in line.sites" :key="site.name + site.src">
                       <a class="search-line-li-a cursor-pointer" @click.left="goToSearch(site.src)"
                          @click.middle="goToSearch(site.src)">
                         <img class="search-line-li-a-img" alt=""
@@ -73,6 +79,16 @@
                              @error="onFaviconError">
                         <span class="nowrap">{{ site.name }}</span>
                       </a>
+                      <span class="search-line-li-btn" v-if="controlEditable">
+                        <i class="iconfont cursor-pointer icon-bianji" title="编辑" @click="promptSearchSiteAt(t, j)"></i>
+                        <i class="iconfont cursor-pointer icon-chacha" title="删除" @click="removeSearchSiteAt(t, j)"></i>
+                      </span>
+                    </li>
+                    <li class="search-line-li" v-if="controlEditable" :key="'add-site-' + t">
+                      <a class="search-line-li-a cursor-pointer" @click="promptSearchSiteAt(t, line.sites.length)">
+                        <span class="search-line-add">➕</span>
+                        <span class="nowrap">添加</span>
+                      </a>
                     </li>
                   </ul>
                 </div>
@@ -82,6 +98,20 @@
             <!-- 折叠动画由 main.css 的 .search-line.no-visible max-height 过渡实现 -->
             <div class="search-bottom">
               <a-divider :margin="10">
+                <a-space size="small" v-if="controlEditable" class="search-bottom-tools">
+                  <a-button size="mini" @click="promptSearchGroupAt(searchToolbox.length)">
+                    <template #icon>
+                      <icon-plus/>
+                    </template>
+                    <template #default>添加分组</template>
+                  </a-button>
+                  <a-button size="mini" @click="resetSearchToolbox">
+                    <template #icon>
+                      <icon-undo/>
+                    </template>
+                    <template #default>恢复默认</template>
+                  </a-button>
+                </a-space>
                 <a-button shape="circle" size="mini" class="search-collapse-btn" @click="switchSearchPanel()">
                   <icon-down v-if="searchToolboxCollapsed"/>
                   <icon-up v-else/>
@@ -236,8 +266,9 @@
       <a-form-item field="name" label="名称">
         <a-input v-model="form.name" @pressEnter="handleOk"/>
       </a-form-item>
-      <a-form-item field="url" label="地址" v-if="form.type >= 3">
-        <a-input v-model="form.url" @pressEnter="handleOk"/>
+      <a-form-item field="url" label="地址" v-if="form.type === 3 || form.type === 4">
+        <a-input v-model="form.url" @pressEnter="handleOk"
+                 :placeholder="form.type === 4 ? '支持 {q} 占位符，搜索时替换为输入的关键词' : ''"/>
       </a-form-item>
     </a-form>
   </a-modal>
@@ -788,8 +819,53 @@ onMounted(() => {
 
 /** ---------------- 搜索 ---------------- */
 let keywords = ref('');
-const searchToolbox = reactive(defaultSearchToolbox);
+
+// 搜索站配置支持编辑并持久化（localStorage key：customSearchToolbox），
+// 与导航区 customBox 同一套「校验 + 容错回退」模式，脏数据永不导致白屏。
+const SEARCH_KEY = 'customSearchToolbox';
+
+// 校验结构是否合法: [{ name, sites: [{ name, src }] }]
+const isValidSearchToolbox = (data) => {
+  if (!Array.isArray(data) || !data.length) return false;
+  return data.every(line =>
+      line && typeof line.name === 'string' && Array.isArray(line.sites)
+      && line.sites.every(site =>
+          site && typeof site.name === 'string' && typeof site.src === 'string'));
+};
+
+// 历史遗留字段清理：站点级 blank/ico/icon 与分组级 icon 均已无人引用（图标改走自动匹配链路），
+// 载入时统一剥离；仅保留业务字段 canBeCollapsed（常用组不参与整体折叠）。
+// collapsed 为 UI 状态：默认 JSON 里的初始值要保留；localStorage 旧数据缺省时按 canBeCollapsed 推导。
+const normalizeSearchToolbox = (data) => data.map((line) => {
+  const out = {name: line.name, sites: line.sites.map(({name, src}) => ({name, src}))};
+  if (line.canBeCollapsed === false) out.canBeCollapsed = false;
+  out.collapsed = line.collapsed !== undefined ? !!line.collapsed : line.canBeCollapsed === false ? false : true;
+  return out;
+});
+
+const cloneDefaultSearchToolbox = () => normalizeSearchToolbox(JSON.parse(JSON.stringify(defaultSearchToolbox)));
+
+const loadInitialSearchToolbox = () => {
+  try {
+    const raw = localStorage.getItem(SEARCH_KEY);
+    if (!raw) return cloneDefaultSearchToolbox();
+    const parsed = JSON.parse(raw);
+    if (!isValidSearchToolbox(parsed)) throw new Error('数据结构不符合约定');
+    return normalizeSearchToolbox(parsed);
+  } catch (e) {
+    console.error('[iLink] 搜索站配置已损坏，已回退为默认配置:', e);
+    return cloneDefaultSearchToolbox();
+  }
+};
+
+const searchToolbox = reactive(loadInitialSearchToolbox());
 const searchToolboxCollapsed = ref(true); // 修复：统一通过 .value 读写，避免 ref 被覆盖成普通值后丢失响应性
+
+watch(searchToolbox, (newVal) => {
+  try {
+    localStorage.setItem(SEARCH_KEY, JSON.stringify(newVal));
+  } catch (e) { /* 隐私模式/配额不足时静默放弃，会话内仍可正常编辑 */ }
+});
 
 const switchSearchPanel = () => {
   searchToolboxCollapsed.value = !searchToolboxCollapsed.value;
@@ -1076,7 +1152,7 @@ const handleOk = () => {
     Message.warning({content: '名称不能为空', showIcon: true});
     return;
   }
-  if (form.type === 3) {
+  if (form.type === 3 || form.type === 4) {
     if (!form.url.trim()) {
       Message.warning({content: '地址不能为空', showIcon: true});
       return;
@@ -1085,15 +1161,80 @@ const handleOk = () => {
     if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(form.url.trim())) {
       form.url = 'https://' + form.url.trim();
     }
-    submitLink();
+    if (form.type === 3) {
+      submitLink();
+    } else {
+      submitSearchSite();
+    }
   } else if (form.type === 2) {
     submitCategory();
   } else if (form.type === 1) {
     submitTab();
+  } else if (form.type === 5) {
+    submitSearchGroup();
   } else {
     Message.error({content: '未知的编辑类型', showIcon: true});
     form.visible = false;
   }
+};
+
+/** ---------------- 搜索区编辑（type: 4搜索站 5搜索分组，复用 form 弹窗） ---------------- */
+const promptSearchSiteAt = (t, j) => {
+  form.type = 4;
+  const sites = searchToolbox[t].sites;
+  if (j < sites.length) {
+    form.name = sites[j].name;
+    form.url = sites[j].src;
+  } else {
+    form.name = '';
+    form.url = '';
+  }
+  form.t = t;
+  form.j = j;
+  form.visible = true;
+};
+const submitSearchSite = () => {
+  const sites = searchToolbox[form.t].sites;
+  if (form.j < sites.length) {
+    sites[form.j].name = form.name;
+    sites[form.j].src = form.url;
+  } else {
+    sites.push({name: form.name, src: form.url});
+  }
+  form.visible = false;
+};
+const promptSearchGroupAt = (t) => {
+  form.type = 5;
+  form.name = t < searchToolbox.length ? searchToolbox[t].name : '';
+  form.t = t;
+  form.visible = true;
+};
+const submitSearchGroup = () => {
+  if (form.t < searchToolbox.length) {
+    searchToolbox[form.t].name = form.name;
+  } else {
+    searchToolbox.push({name: form.name, sites: []}); // 新分组默认展开，便于立即编辑
+  }
+  form.visible = false;
+};
+const removeSearchSiteAt = (t, j) => {
+  searchToolbox[t].sites.splice(j, 1);
+};
+const removeSearchGroupAt = (t) => {
+  searchToolbox.splice(t, 1);
+};
+const resetSearchToolbox = () => {
+  Modal.confirm({
+    title: '恢复默认搜索站',
+    content: '将丢弃你对搜索区的全部修改（分组与站点），恢复为内置默认；导航区配置不受影响。',
+    okText: '恢复',
+    cancelText: '取消',
+    onOk: () => {
+      localStorage.removeItem(SEARCH_KEY);
+      searchToolbox.splice(0, searchToolbox.length, ...cloneDefaultSearchToolbox());
+      Message.success({content: '搜索区已恢复为默认', showIcon: true});
+    },
+  });
 };
 
 const handleTabAdd = (t) => {

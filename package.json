@@ -1,6 +1,6 @@
 {
   "name": "ilink",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "iLink - 一个简洁的无后端静态导航站点（个人书签页） | 支持多设备云端同步",
   "private": true,
   "scripts": {
@@ -14,7 +14,7 @@
     "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
-    "@arco-design/web-vue": "^2.42.1",
+    "@arco-design/web-vue": "^2.42.0",
     "@vitejs/plugin-vue": "^4.0.0",
     "unplugin-auto-import": "^0.13.0",
     "unplugin-vue-components": "^0.23.0",
