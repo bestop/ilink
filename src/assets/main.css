@@ -922,7 +922,36 @@ body .json-textbox .arco-textarea {
   font-weight: 600;
 }
 
-/* ======================= 9. 移动端适配（≤768px） ======================= */
+/* ======================= 9. 桌面端侧栏钉住（≥769px） ======================= */
+/* 设置侧栏 sticky 固定在视口：主内容滚动时侧栏不动，自身内容超高时独立滚动 */
+@media (min-width: 769px) {
+  body .arco-layout-sider {
+    position: sticky;
+    top: 0;
+    align-self: flex-start; /* 避免 flex 默认 stretch 拉满容器高度导致 sticky 失效 */
+    height: 100vh;
+    height: 100svh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* children 撑满，保证「收起设置」页脚常驻视口底部 */
+  body .arco-layout-sider .arco-layout-sider-children {
+    height: 100%;
+  }
+
+  /* 侧栏内滚动条弱化，保持安静 */
+  body .arco-layout-sider::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  body .arco-layout-sider::-webkit-scrollbar-thumb {
+    background: var(--ilink-border-strong);
+    border-radius: 2px;
+  }
+}
+
+/* ======================= 10. 移动端适配（≤768px） ======================= */
 @media (max-width: 768px) {
   .page-shell {
     padding: 26px 14px 6px;
