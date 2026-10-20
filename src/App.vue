@@ -173,6 +173,12 @@
                   </template>
                   <template #default>添加导航面板</template>
                 </a-button>
+                <a-button type="secondary" @click="triggerJsonImport" size="small">
+                  <template #icon>
+                    <IconUpload/>
+                  </template>
+                  <template #default>导入 JSON</template>
+                </a-button>
                 <a-button type="secondary" @click="triggerBookmarkImport" size="small">
                   <template #icon>
                     <IconImport/>
@@ -199,9 +205,11 @@
                   <template #default>重置为默认</template>
                 </a-button>
               </a-space>
-              <!-- 隐藏的文件选择框,用于书签导入 -->
+              <!-- 隐藏的文件选择框,用于书签导入 / JSON 导入 -->
               <input ref="bookmarkFileInput" type="file" accept=".html,.htm,text/html" class="hidden"
                      @change="readBookmarkFile"/>
+              <input ref="jsonFileInput" type="file" accept=".json,application/json,text/plain" class="hidden"
+                     @change="readJsonFile"/>
             </a-form>
           </a-layout-content>
           <a-layout-footer class="settings-footer">
@@ -443,6 +451,36 @@ const resetBox = () => {
   box.splice(0, box.length);
   box.push(...cloneDefaultBox());
   Message.success({content: '已重置为默认配置', showIcon: true});
+};
+
+/** ---------------- JSON 配置文件导入（与导出/云端同步同一替换语义） ---------------- */
+const jsonFileInput = ref(null);
+const triggerJsonImport = () => {
+  jsonFileInput.value && jsonFileInput.value.click();
+};
+
+const readJsonFile = (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = ''; // 重置以便可以重复选择同一文件
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const parsed = JSON.parse(String(ev.target.result));
+      if (!isValidBox(parsed)) {
+        throw new Error('结构需为 [{ name, categories: [{ name, links: [{ name, url }] }] }]');
+      }
+      box.splice(0, box.length);
+      box.push(...parsed);
+      const linkCount = parsed.reduce((n, p) => n + p.categories.reduce((m, c) => m + c.links.length, 0), 0);
+      Message.success({content: `已导入 ${parsed.length} 个面板、共 ${linkCount} 条链接`, showIcon: true});
+    } catch (err) {
+      console.error('[iLink] JSON 导入失败:', err);
+      Message.error({content: `导入失败：${err.message}`, showIcon: true});
+    }
+  };
+  reader.onerror = () => Message.error({content: '文件读取失败', showIcon: true});
+  reader.readAsText(f);
 };
 
 // 把当前配置导出为 JSON 文件，作为手动备份手段
