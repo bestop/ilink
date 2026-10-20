@@ -1,314 +1,1036 @@
-.arco-layout {
-    height: 100vh;
+/** =====================================================================
+ * iLink · Minimal Premium UI
+ * ---------------------------------------------------------------------
+ * 设计语言：简洁、高级、优雅、有设计感 —— 靠留白、层次与微交互取胜。
+ * 文件结构：
+ *   1) 设计令牌（亮 / 暗两套 CSS 变量）
+ *   2) 基础排版与工具类
+ *   3) Arco 全局调优（按钮 / 输入 / 弹窗 / 菜单 / 滚动条…）
+ *   4) 搜索区（页面视觉锚点）
+ *   5) 导航面板卡片与链接 chip
+ *   6) 角落触发按钮与弹出菜单
+ *   7) 设置侧栏
+ *   8) 弹窗内容（编辑 / 书签导入 / 云端同步）
+ *   9) 移动端适配（≤768px）
+ * 说明：Arco 组件样式在本文件之后注入，所有覆盖一律使用更高优先级选择器，
+ *       JS 耦合的类名（.tab / .link-li / .search-line 等）保持原名。
+ * ===================================================================== */
+
+/* ============================== 1. 设计令牌 ============================== */
+:root {
+  /* 色板 · 亮色 */
+  --ilink-bg: #f6f7f9;                       /* 页面底 */
+  --ilink-surface: #ffffff;                  /* 卡片面 */
+  --ilink-surface-2: #f2f3f5;                /* 次级面（JSON 淡底等） */
+  --ilink-text-1: #1d2129;                   /* 主文字 */
+  --ilink-text-2: #4e5969;                   /* 次级文字 */
+  --ilink-text-3: #86909c;                   /* 弱化文字 */
+  --ilink-primary: #165dff;                  /* Arco 蓝 */
+  --ilink-primary-hover: #4080ff;
+  --ilink-primary-soft: rgba(22, 93, 255, 0.08);    /* 淡蓝底 */
+  --ilink-primary-soft-2: rgba(22, 93, 255, 0.16);  /* 描边染色 */
+  --ilink-primary-ring: rgba(22, 93, 255, 0.14);    /* focus 柔光环 */
+  --ilink-border: rgba(29, 33, 41, 0.08);
+  --ilink-border-strong: rgba(29, 33, 41, 0.16);
+  --ilink-shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ilink-shadow-hover: 0 8px 24px rgba(29, 33, 41, 0.10);
+  --ilink-shadow-pop: 0 12px 40px rgba(29, 33, 41, 0.16);
+  --ilink-shadow-sider: -8px 0 24px rgba(29, 33, 41, 0.06);
+
+  /* 形状 */
+  --ilink-r-card: 14px;      /* 卡片 / 弹窗 */
+  --ilink-r-input: 12px;     /* 输入 */
+  --ilink-r-control: 10px;   /* 按钮 */
+  --ilink-r-chip: 10px;      /* 链接 chip */
+
+  /* 动效 */
+  --ilink-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ilink-dur: 180ms;
+  --ilink-dur-slow: 260ms;
+
+  color-scheme: light;
 }
 
+/* 色板 · 暗色（body[arco-theme='dark'] 由 App.vue 主题切换写入） */
+body[arco-theme='dark'] {
+  --ilink-bg: #17171a;
+  --ilink-surface: #232324;
+  --ilink-surface-2: #2a2a2c;
+  --ilink-text-1: rgba(255, 255, 255, 0.9);
+  --ilink-text-2: rgba(255, 255, 255, 0.68);
+  --ilink-text-3: rgba(255, 255, 255, 0.46);
+  --ilink-primary: #4080ff;
+  --ilink-primary-hover: #6aa1ff;
+  --ilink-primary-soft: rgba(64, 128, 255, 0.18);
+  --ilink-primary-soft-2: rgba(64, 128, 255, 0.32);
+  --ilink-primary-ring: rgba(64, 128, 255, 0.25);
+  --ilink-border: rgba(255, 255, 255, 0.09);
+  --ilink-border-strong: rgba(255, 255, 255, 0.18);
+  --ilink-shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ilink-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --ilink-shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --ilink-shadow-sider: 0 0 24px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
+}
+
+/* ========================= 2. 基础排版与工具类 ========================= */
 body {
-    background-color: var(--color-neutral-1);
+  background-color: var(--ilink-bg);
+  color: var(--ilink-text-1);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC",
+      "Noto Sans SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--ilink-dur) var(--ilink-ease);
 }
 
 ul {
-    padding: 0;
-    margin: 0;
+  padding: 0;
+  margin: 0;
 }
 
 li {
-    padding: 0;
-    margin: 0;
-    list-style: none;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+::selection {
+  background: var(--ilink-primary-soft-2);
 }
 
 .cursor-pointer {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .cursor-move {
-    cursor: move;
+  cursor: move;
 }
 
 .grabbable {
-    cursor: move; /* fallback if grab cursor is unsupported */
-    cursor: grab;
-    cursor: -moz-grab;
-    cursor: -webkit-grab;
+  cursor: move; /* fallback if grab cursor is unsupported */
+  cursor: grab;
+  cursor: -moz-grab;
+  cursor: -webkit-grab;
 }
 
 /* (Optional) Apply a "closed-hand" cursor during drag operation. */
 .grabbable:active {
-    cursor: grabbing;
-    cursor: -moz-grabbing;
-    cursor: -webkit-grabbing;
+  cursor: grabbing;
+  cursor: -moz-grabbing;
+  cursor: -webkit-grabbing;
 }
 
 .hidden {
-    display: none !important;
+  display: none !important;
 }
 
 .no-visible {
-    visibility: hidden !important;
+  visibility: hidden !important;
 }
 
 .inlines {
-    display: inline-flex;
-}
-
-/** ------------- 覆盖 arco ------------ **/
-
-/*
-.arco-tabs-nav-tab {
-    border-right: 1px solid var(--color-neutral-3);
-    border-top: 1px solid var(--color-neutral-3);
-}
-
-.arco-tabs-nav-type-card .arco-tabs-tab, .arco-tabs-nav-type-card-gutter .arco-tabs-tab {
-    border-left: 1px solid var(--color-neutral-3);
-}
-*/
-.arco-card-size-medium .arco-card-body {
-    padding: 0;
-}
-
-.arco-tabs-nav-type-card .arco-tabs-tab:first-child {
-    border-top-left-radius: 0;
-}
-
-.arco-tabs-nav-type-card .arco-tabs-tab:last-child {
-    border-top-right-radius: 0;
-}
-
-.arco-divider-text {
-    background: none !important;
-}
-
-.arco-tabs-content {
-    padding: 16px;
-}
-
-/** ------------- 查找面板的样式 ------------ **/
-
-.search-panel {
-    margin-top: 12px;
-    transition: opacity .1s ease-out;
-}
-
-.search-bottom {
-    transition: margin-top .2s, margin-bottom .2s
-}
-
-.search-line {
-    position: relative;
-    display: flex;
-    margin-bottom: 16px;
-}
-
-.search-line-title {
-    position: relative;
-    display: flex;
-    max-width: 10%;
-    overflow: hidden;
-    color: var(--color-neutral-6);
-    align-items: center;
-    flex: 0 0 10%;
-    margin-left: 5px;
+  display: inline-flex;
 }
 
 .nowrap {
-    white-space: nowrap;
+  white-space: nowrap;
 }
 
-.search-line-ul {
-    display: flex;
-    max-width: 90%;
-    overflow: hidden;
-    flex: 0 0 90%;
-    padding: 0;
-    margin: 0;
+/* 拖拽排序时的占位残影（vuedraggable 默认 ghost 类） */
+.sortable-ghost {
+  opacity: 0.4;
 }
 
-.search-line-li {
-    max-width: 16.666667%;
-    flex: 0 0 16.666667%;
+/* 页面骨架：搜索区 + 导航区共用的居中容器 */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 44px 20px 8px;
 }
 
-.search-line-li-a {
-    position: relative;
-    display: inline-flex;
-    max-width: 100%;
-    padding: 8px;
-    border-radius: 2px;
-    overflow: hidden;
-    transition: background .1s ease-out;
-    color: inherit;
-    text-decoration: none;
+.page-shell > div {
+  width: 100%;
+  max-width: 760px;
 }
 
-.search-line-li-a:hover {
-    background: var(--color-neutral-3);
-}
-
-.search-line-li-a:hover:after {
-    opacity: 0;
-}
-
-.search-line-li-a:after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /*box-shadow: inset -6px 0 6px 0 var(--block-background);*/
-    transition: opacity .1s ease-out;
-}
-
-.search-line-li-a-img {
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
-    opacity: .9;
-    /*filter: saturate(80%);*/
-}
-
-
-/** ------------- tab 面板下的样式 ------------ **/
-
-.link-li {
-    float: left;
-    width: 20%;
-    background-color: transparent;
-    white-space: nowrap;
-    overflow: hidden;
-    box-sizing: border-box;
-    border: 1px dashed transparent;
-    padding: 2px;
-}
-
-.link-li-editable {
-    border: 1px dashed #ddd;
-}
-
-.link-a {
-    cursor: pointer;
-    text-decoration: none;
-    width: 65%;
-    float: left;
-    display: block;
-    overflow: hidden;
-    word-wrap: break-word;
-    text-overflow: ellipsis;
-    height: 20px;
-    line-height: 20px;
-}
-
-.link-chip-btn {
-    float: right;
-}
-
-.link-chip .link-chip-image {
-    border-radius: 50%;
-    display: inline-block;
-    text-align: center;
-    float: left;
-    width: 20px;
-    height: 20px;
-    line-height: 20px;
-    margin-right: 6px;
-}
-
-/* 右下角功能样式 */
-
-.button-trigger {
-    position: fixed;
-    right: 220px;
-    bottom: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    color: var(--color-white);
-    font-size: 14px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.1s;
-    background-color: var(--color-neutral-5);
-    /*z-index: 999;*/
-}
-
-.button-trigger-settings {
-    right: 420px !important;
-}
-
-.button-trigger.button-trigger-active {
-    background-color: var(--color-neutral-4);
-}
-
-/* 滚动条 */
-
+/* 滚动条：细、安静、双主题可用 */
 ::-webkit-scrollbar {
-    width: 8px;
-    border-radius: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-    border-radius: 10px;
-    background-color: #adadaba4;
+  border-radius: 8px;
+  background-color: rgba(134, 144, 156, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(134, 144, 156, 0.5);
 }
 
 ::-webkit-scrollbar-track {
-    border-radius: 10px;
-    background-color: #fff;
+  border-radius: 8px;
+  background-color: transparent;
 }
 
-/* 强制换行 */
-.json-textbox .arco-textarea {
-    word-break: break-all;
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(134, 144, 156, 0.3) transparent;
 }
 
-/** ------------- 书签导入预览弹窗 ------------ **/
+/* ========================= 3. Arco 全局调优 ========================= */
 
+/* ---- 布局骨架 ---- */
+body .arco-layout {
+  min-height: 100vh;
+  min-height: 100svh;
+  background: transparent;
+}
+
+body .arco-layout-content,
+body .arco-layout-header,
+body .arco-layout-footer {
+  background: transparent;
+}
+
+/* ---- 按钮：10px 圆角、柔和投影 ---- */
+body .arco-btn:not(.arco-btn-shape-circle) {
+  border-radius: var(--ilink-r-control);
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      transform var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-btn-primary {
+  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.16);
+}
+
+/* ---- 输入：白面 + 细描边 + focus 柔光环 ---- */
+body .arco-input-wrapper,
+body .arco-textarea-wrapper {
+  background: var(--ilink-surface);
+  border: 1px solid var(--ilink-border);
+  border-radius: var(--ilink-r-input);
+  transition: border-color var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-input-wrapper:hover,
+body .arco-textarea-wrapper:hover {
+  border-color: var(--ilink-border-strong);
+}
+
+body .arco-input-wrapper.arco-input-focus,
+body .arco-textarea-wrapper:focus-within {
+  background: var(--ilink-surface);
+  border-color: var(--ilink-primary);
+  box-shadow: 0 0 0 3px var(--ilink-primary-ring);
+}
+
+body .arco-input::placeholder,
+body .arco-textarea::placeholder {
+  color: var(--ilink-text-3);
+}
+
+/* ---- 卡片 ---- */
+body .arco-card {
+  border-radius: var(--ilink-r-card);
+}
+
+/* ---- 标签页（全局兜底，卡片内另有精修） ---- */
+body .arco-tabs-content {
+  overflow: hidden; /* 含住浮动排版的链接 chip */
+}
+
+/* ---- 分隔线 ---- */
+body .arco-divider-text {
+  background: none !important;
+  color: var(--ilink-text-3);
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+/* ---- 弹窗 ---- */
+body .arco-modal {
+  border: 1px solid var(--ilink-border);
+  border-radius: var(--ilink-r-card);
+  background: var(--ilink-surface);
+  box-shadow: var(--ilink-shadow-pop);
+  max-width: calc(100vw - 24px);
+}
+
+body .arco-modal-header {
+  background: transparent;
+  border-bottom: none;
+  padding: 20px 24px 0;
+}
+
+body .arco-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ilink-text-1);
+  line-height: 24px;
+}
+
+body .arco-modal-body {
+  padding: 14px 24px 20px;
+  color: var(--ilink-text-2);
+}
+
+body .arco-modal-footer {
+  border-top: none;
+  padding: 0 24px 20px;
+}
+
+body .arco-mask {
+  background: rgba(29, 33, 41, 0.45);
+}
+
+body[arco-theme='dark'] .arco-mask {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* ---- 消息提示 ---- */
+body .arco-message {
+  border: 1px solid var(--ilink-border);
+  border-radius: var(--ilink-r-control);
+  box-shadow: var(--ilink-shadow-pop);
+}
+
+/* ==================== 4. 搜索区（页面视觉锚点） ==================== */
+
+/* 大号搜索框：高 46px、圆角 12px、focus 主色柔光环 */
+body .arco-input-search {
+  height: 46px;
+  border-radius: var(--ilink-r-input);
+  box-shadow: var(--ilink-shadow-rest);
+}
+
+body .arco-input-search .arco-input {
+  font-size: 14px;
+}
+
+body .arco-input-search.arco-input-focus {
+  border-color: var(--ilink-primary);
+  box-shadow: 0 0 0 4px var(--ilink-primary-ring);
+}
+
+body .arco-input-search .arco-input-icon-hover,
+body .arco-input-search .arco-input-icon-hover::before {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+body .arco-input-search .arco-input-icon-hover {
+  color: var(--ilink-text-3);
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-input-search .arco-input-icon-hover:hover {
+  color: var(--ilink-primary);
+}
+
+body .arco-input-search .arco-input-icon-hover:hover::before {
+  background-color: var(--ilink-primary-soft);
+}
+
+/* 搜索面板：更透气的行距 */
+.search-panel {
+  margin-top: 20px;
+}
+
+/* 行：展开上限兜底 + 折叠时平滑收起（替代旧的 -420px 负 margin 方案） */
+.search-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  overflow: hidden;
+  max-height: 72px;
+  transition: max-height var(--ilink-dur-slow) var(--ilink-ease),
+      margin-bottom var(--ilink-dur-slow) var(--ilink-ease),
+      opacity var(--ilink-dur-slow) var(--ilink-ease);
+}
+
+.search-line.no-visible {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}
+
+/* 行标题：弱化文字 + 细分隔线 */
+.search-line-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 78px;
+  max-width: 78px;
+  color: var(--ilink-text-3);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.search-line-title::after {
+  content: "";
+  flex: none;
+  width: 1px;
+  height: 12px;
+  margin-left: 12px;
+  border-radius: 1px;
+  background: var(--ilink-border-strong);
+}
+
+.search-line-ul {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+.search-line-li {
+  max-width: 16.666667%;
+  flex: 0 0 16.666667%;
+}
+
+.search-line-li-a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--ilink-r-chip);
+  overflow: hidden;
+  color: var(--ilink-text-2);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--ilink-dur) var(--ilink-ease),
+      color var(--ilink-dur) var(--ilink-ease);
+}
+
+.search-line-li-a:hover {
+  background: var(--ilink-primary-soft);
+  color: var(--ilink-primary);
+}
+
+.search-line-li-a-img {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border-radius: 4px;
+  opacity: 0.92;
+  flex-shrink: 0;
+}
+
+/* 折叠按钮：更轻的幽灵圆钮 */
+.search-bottom {
+  margin-top: 4px;
+}
+
+body .search-bottom .arco-btn {
+  width: 28px;
+  height: 28px;
+  color: var(--ilink-text-3);
+  background-color: var(--ilink-surface);
+  border: 1px solid var(--ilink-border);
+  box-shadow: var(--ilink-shadow-rest);
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      transform var(--ilink-dur) var(--ilink-ease);
+}
+
+body .search-bottom .arco-btn:hover {
+  color: var(--ilink-primary);
+  background-color: var(--ilink-primary-soft);
+  border-color: var(--ilink-primary-soft-2);
+  transform: translateY(-1px);
+}
+
+body .search-bottom .arco-btn .arco-icon {
+  font-size: 12px;
+}
+
+/* ================ 5. 导航面板卡片与链接 chip ================ */
+
+/* 面板卡片：常态极淡阴影，hover 抬升 + 边框染淡蓝 */
+body .arco-card.tab {
+  width: 100%;
+  border: 1px solid var(--ilink-border);
+  border-radius: var(--ilink-r-card);
+  background: var(--ilink-surface);
+  box-shadow: var(--ilink-shadow-rest);
+  overflow: hidden;
+  transition: transform var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-card.tab:hover {
+  transform: translateY(-2px);
+  border-color: var(--ilink-primary-soft-2);
+  box-shadow: var(--ilink-shadow-hover);
+}
+
+body .arco-card.tab > .arco-card-header {
+  padding: 16px 20px 2px;
+  border-bottom: none;
+}
+
+body .arco-card.tab .arco-card-header-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--ilink-text-1);
+}
+
+body .arco-card.tab > .arco-card-body {
+  padding: 10px 16px 16px;
+}
+
+/* 卡片标题右侧的编辑图标：灰色，hover 变主色 */
+body .arco-card.tab .arco-card-header-extra .arco-space {
+  gap: 6px;
+}
+
+body .arco-card.tab .arco-card-header-extra .iconfont {
+  font-size: 15px;
+  color: var(--ilink-text-3);
+  transition: color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-card.tab .arco-card-header-extra .iconfont:hover {
+  color: var(--ilink-primary);
+}
+
+/* 分类标签：无重边框，激活项主色文字 + 主色下划线 */
+body .arco-card.tab .arco-tabs-nav {
+  margin-bottom: 10px;
+}
+
+body .arco-card.tab .arco-tabs-nav::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--ilink-border);
+}
+
+body .arco-card.tab .arco-tabs-nav-type-card .arco-tabs-tab {
+  position: relative;
+  margin: 0 6px 0 0;
+  padding: 7px 12px 9px;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--ilink-text-2);
+  font-weight: 400;
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-card.tab .arco-tabs-nav-type-card .arco-tabs-tab:hover {
+  color: var(--ilink-text-1);
+  background: var(--ilink-primary-soft);
+}
+
+body .arco-card.tab .arco-tabs-nav-type-card .arco-tabs-tab.arco-tabs-tab-active {
+  color: var(--ilink-primary);
+  font-weight: 500;
+  background: transparent;
+}
+
+body .arco-card.tab .arco-tabs-tab::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ilink-primary);
+  opacity: 0;
+  transform: scaleX(0.5);
+  transition: opacity var(--ilink-dur) var(--ilink-ease),
+      transform var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-card.tab .arco-tabs-tab.arco-tabs-tab-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+body .arco-card.tab .arco-tabs-content {
+  padding: 14px 2px 0;
+}
+
+/* 标签的关闭 / 新增按钮（编辑态）：弱化为灰，hover 主色 */
+body .arco-card.tab .arco-tabs-icon-hover,
+body .arco-card.tab .arco-tabs-tab-close,
+body .arco-card.tab .arco-tabs-nav-add-btn {
+  color: var(--ilink-text-3);
+  border-radius: 8px;
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-card.tab .arco-tabs-nav-add-btn {
+  border: 1px dashed var(--ilink-border-strong);
+  background: transparent;
+}
+
+body .arco-card.tab .arco-tabs-icon-hover:hover,
+body .arco-card.tab .arco-tabs-tab-close:hover,
+body .arco-card.tab .arco-tabs-nav-add-btn:hover {
+  color: var(--ilink-primary);
+}
+
+body .arco-card.tab .arco-tabs-icon-hover:hover::before,
+body .arco-card.tab .arco-tabs-tab-close:hover::before,
+body .arco-card.tab .arco-tabs-nav-add-btn:hover::before {
+  background-color: var(--ilink-primary-soft);
+}
+
+/* 链接 chip：安静的小胶囊（去生硬边框，hover 淡蓝底 + 主色文字） */
+.link-li {
+  float: left;
+  width: 20%;
+  background-color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px dashed transparent;
+  border-radius: var(--ilink-r-chip);
+  padding: 3px;
+  transition: border-color var(--ilink-dur) var(--ilink-ease),
+      opacity var(--ilink-dur) var(--ilink-ease);
+}
+
+.link-li-editable {
+  border-color: var(--ilink-border);
+}
+
+.link-li-editable:hover {
+  border-color: var(--ilink-primary-soft-2);
+}
+
+.link-chip {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  border-radius: var(--ilink-r-chip);
+  color: var(--ilink-text-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color var(--ilink-dur) var(--ilink-ease),
+      color var(--ilink-dur) var(--ilink-ease);
+}
+
+.link-chip:hover {
+  background: var(--ilink-primary-soft);
+  color: var(--ilink-primary);
+}
+
+.link-chip .link-chip-image {
+  float: none;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 50%;
+  font-size: 11px;
+  text-align: center;
+}
+
+.link-a {
+  float: none;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-wrap: break-word;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* 编辑态删除按钮：hover 浮现，弱灰变主色 */
+.link-chip-btn {
+  float: none;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--ilink-text-3);
+  opacity: 0;
+  transition: opacity var(--ilink-dur) var(--ilink-ease),
+      color var(--ilink-dur) var(--ilink-ease);
+}
+
+.link-li:hover .link-chip-btn {
+  opacity: 1;
+}
+
+.link-chip-btn .iconfont:hover {
+  color: var(--ilink-primary);
+}
+
+/* ===================== 6. 角落触发按钮与弹出菜单 ===================== */
+
+/* 主按钮：48px 圆形白底 + 柔和阴影 + hover 微抬升；激活态主色渐变 */
+.button-trigger {
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  color: var(--ilink-text-2);
+  font-size: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--ilink-border);
+  background: var(--ilink-surface);
+  box-shadow: var(--ilink-shadow-rest);
+  cursor: pointer;
+  transition: right var(--ilink-dur-slow) var(--ilink-ease),
+      transform var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      color var(--ilink-dur) var(--ilink-ease);
+}
+
+.button-trigger:hover {
+  color: var(--ilink-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--ilink-shadow-hover);
+}
+
+.button-trigger.button-trigger-active {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #4080ff, #165dff);
+  box-shadow: 0 8px 20px rgba(22, 93, 255, 0.35);
+}
+
+.button-trigger .arco-icon {
+  font-size: 18px;
+}
+
+/* 设置面板展开时让开右侧 300px 侧栏 */
+.button-trigger.button-trigger-settings {
+  right: 324px !important;
+}
+
+/* 弹出菜单（popButton 模式）：一列 44px 圆形按钮 */
+body .arco-trigger-arrow {
+  display: none !important;
+}
+
+body .arco-menu-pop-button .arco-menu-item {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 10px;
+  line-height: 44px;
+  color: var(--ilink-text-2);
+  border: 1px solid var(--ilink-border);
+  border-radius: 50%;
+  background: var(--ilink-surface);
+  box-shadow: var(--ilink-shadow-rest);
+  transition: transform var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+body .arco-menu-pop-button .arco-menu-item:hover {
+  color: var(--ilink-primary);
+  border-color: var(--ilink-primary-soft-2);
+  transform: translateY(-2px);
+  box-shadow: var(--ilink-shadow-hover);
+}
+
+body .arco-menu-pop-button .arco-menu-item .arco-icon {
+  font-size: 17px;
+}
+
+/* ============================ 7. 设置侧栏 ============================ */
+
+body .arco-layout-sider {
+  background: var(--ilink-surface);
+}
+
+body .arco-layout-sider:not(.arco-layout-sider-collapsed) {
+  box-shadow: var(--ilink-shadow-sider);
+}
+
+body .arco-layout-sider .arco-layout {
+  height: 100%;
+  min-height: 0;
+}
+
+body .arco-layout-sider .arco-layout-content {
+  padding: 14px 16px 4px;
+}
+
+.settings-header {
+  flex: 0 0 auto;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--ilink-border);
+  background: transparent;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--ilink-text-1);
+}
+
+.settings-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: 14px 16px 18px;
+  border-top: 1px solid var(--ilink-border);
+  background: transparent;
+  text-align: center;
+}
+
+/* JSON 编辑框：等宽字体 12px 淡底 */
+body .json-textbox.arco-textarea-wrapper {
+  background: var(--ilink-surface-2);
+  border-color: transparent;
+  border-radius: var(--ilink-r-control);
+}
+
+body .json-textbox.arco-textarea-wrapper:focus-within {
+  background: var(--ilink-surface);
+  border-color: var(--ilink-primary);
+  box-shadow: 0 0 0 3px var(--ilink-primary-ring);
+}
+
+body .json-textbox .arco-textarea {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ilink-text-2);
+  word-break: break-all;
+}
+
+/* ============== 8. 弹窗内容（编辑 / 书签导入 / 云端同步） ============== */
+
+/* 书签导入预览 */
 .import-preview-list {
-    max-height: 320px;
-    overflow: auto;
+  max-height: 320px;
+  overflow: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
 }
 
 .import-preview-item {
-    padding: 4px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background-color var(--ilink-dur) var(--ilink-ease);
+}
+
+.import-preview-item:hover {
+  background: var(--ilink-primary-soft);
 }
 
 .import-preview-meta {
-    color: var(--color-neutral-6);
-    font-size: 12px;
-    margin-left: 6px;
+  margin-left: 8px;
+  color: var(--ilink-text-3);
+  font-size: 12px;
 }
 
 .import-preview-tip {
-    margin-top: 8px;
-    color: var(--color-neutral-6);
-    font-size: 12px;
+  margin-top: 10px;
+  color: var(--ilink-text-3);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
-/* ---------------- 云端同步弹窗 ---------------- */
+/* 云端同步弹窗 */
 .sync-meta-row {
-    display: flex;
-    font-size: 13px;
-    line-height: 1.9;
+  display: flex;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ilink-text-2);
+}
+
+.sync-meta-row > span:last-child {
+  min-width: 0;
 }
 
 .sync-meta-label {
-    width: 84px;
-    flex-shrink: 0;
-    color: var(--color-neutral-6);
-}
-
-.sync-tip {
-    margin-top: 8px;
-    color: var(--color-neutral-6);
-    font-size: 12px;
-    line-height: 1.7;
+  width: 88px;
+  flex-shrink: 0;
+  color: var(--ilink-text-3);
 }
 
 .sync-gist-id {
-    margin-right: 4px;
-    font-family: monospace;
-    font-size: 12px;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  margin-right: 6px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  border: 1px solid var(--ilink-border);
+  border-radius: 6px;
+  background: var(--ilink-surface-2);
+  color: var(--ilink-text-2);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.sync-tip {
+  margin-top: 10px;
+  color: var(--ilink-text-3);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.sync-tip b {
+  color: var(--ilink-text-2);
+  font-weight: 600;
+}
+
+/* ======================= 9. 移动端适配（≤768px） ======================= */
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 26px 14px 6px;
+  }
+
+  /* 输入字号 16px，避免 iOS 聚焦自动放大 */
+  body .arco-input,
+  body .arco-textarea {
+    font-size: 16px;
+  }
+
+  /* 搜索面板行：标题收窄，站点列表横向滑动（隐藏滚动条） */
+  .search-line-title {
+    flex: 0 0 64px;
+    max-width: 64px;
+  }
+
+  .search-line-title::after {
+    margin-left: 8px;
+  }
+
+  .search-line-ul {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .search-line-ul::-webkit-scrollbar {
+    display: none;
+  }
+
+  .search-line-li {
+    flex: 0 0 auto;
+    max-width: none;
+  }
+
+  .search-line-li-a {
+    padding: 9px 10px;
+  }
+
+  /* 链接 chip：两列布局 + 加大触控热区；编辑删除钮常显（触屏无 hover） */
+  .link-li {
+    width: 50%;
+    padding: 4px;
+  }
+
+  .link-chip {
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+
+  .link-chip-btn {
+    opacity: 1;
+  }
+
+  /* 设置侧栏 → 全宽浮层 */
+  body .arco-layout-sider {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-width: 100vw !important;
+    z-index: 900;
+    box-shadow: var(--ilink-shadow-pop);
+  }
+
+  body .arco-layout-sider.arco-layout-sider-collapsed {
+    width: 0 !important;
+    max-width: 0 !important;
+    min-width: 0 !important;
+    box-shadow: none;
+  }
+
+  body .arco-layout-sider .arco-layout-content {
+    padding: 16px 16px 8px;
+  }
+
+  /* 弹窗宽度 */
+  body .arco-modal {
+    max-width: min(480px, 92vw);
+  }
+
+  /* 角落按钮：贴近拇指区，保持 48px 触控尺寸 */
+  .button-trigger {
+    right: 14px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .button-trigger.button-trigger-settings {
+    right: 14px !important;
+  }
+
+  /* 云同步弹窗元信息在窄屏下略收紧 */
+  body .sync-meta-label {
+    width: 76px;
+  }
+}
+
+/* 横屏矮窗口：压缩纵向留白 */
+@media (max-height: 480px) and (orientation: landscape) {
+  .page-shell {
+    padding-top: 16px;
+  }
+
+  body .arco-input-search {
+    height: 42px;
+  }
 }

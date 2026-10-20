@@ -31,6 +31,13 @@
           </template>
           设置导航
         </a-menu-item>
+        <a-menu-item key="3">
+          <template #icon>
+            <IconMoon v-if="!isDarkTheme"/>
+            <IconSun v-else/>
+          </template>
+          {{ isDarkTheme ? '浅色模式' : '深色模式' }}
+        </a-menu-item>
       </a-menu>
     </template>
   </a-trigger>
@@ -41,11 +48,9 @@
       <a-layout-content id="main-content">
 
         <!-- 搜索功能 -->
-        <div
-            style="padding: 20px; flex-direction: column; display: flex;  justify-content: center;  align-items: center;">
-          <div style="width: 100%; max-width: 760px;">
-            <a-space direction="vertical" size="large"
-                     style="border: 1px solid var(--color-neutral-3); width: 100%;">
+        <div class="page-shell">
+          <div>
+            <a-space direction="vertical" size="large" style="width: 100%;">
               <a-input-search :style="{width: '100%'}"
                               placeholder="输入关键词后，点击下方的搜索网站，直接会跳转到新标签页搜索"
                               v-model="keywords"/>
@@ -71,15 +76,12 @@
               </div>
             </div>
 
-            <div class="search-bottom" :style="{ marginTop : searchToolboxCollapsed ? '-420px' : '0px'}">
-              <a-divider :margin="10" v-if="searchToolboxCollapsed">
-                <a-button shape="circle" size="mini" @click="switchSearchPanel()">
+            <!-- 折叠动画由 main.css 的 .search-line.no-visible max-height 过渡实现 -->
+            <div class="search-bottom">
+              <a-divider :margin="10">
+                <a-button shape="circle" size="mini" class="search-collapse-btn" @click="switchSearchPanel()">
                   <icon-down v-if="searchToolboxCollapsed"/>
-                </a-button>
-              </a-divider>
-              <a-divider :margin="10" v-if="!searchToolboxCollapsed">
-                <a-button shape="circle" size="mini" @click="switchSearchPanel()">
-                  <icon-up v-if="!searchToolboxCollapsed"/>
+                  <icon-up v-else/>
                 </a-button>
               </a-divider>
             </div>
@@ -87,7 +89,7 @@
           </div>
 
           <!-- 编辑功能 -->
-          <div style="width: 100%; max-width: 760px;">
+          <div>
 
             <!-- 导航本体 -->
             <draggable :list="box" handle=".category-drag-handle" :animation="100" draggable=".tab" group="tabs"
@@ -159,38 +161,38 @@
           :collapsed="!controlEditable">
 
         <a-layout>
-          <a-layout-header style="text-align: center; padding: 10px; border-bottom: 1px">设置</a-layout-header>
+          <a-layout-header class="settings-header">设置</a-layout-header>
           <a-layout-content :class="{'hidden':!controlEditable}">
             <a-form :class="{'hidden':!settingsForm.visible}">
               <a-textarea v-model="boxStr" :class="{'json-textbox':true}" :auto-size="{ minRows:5, maxRows:20 }"/>
-              <a-space style="margin-top: 12px;margin-left: 6px" wrap>
+              <a-space style="margin-top: 14px" wrap>
                 <a-button type="primary" @click="promptTabAt(box.length)"
-                          size="mini">
+                          size="small">
                   <template #icon>
                     <icon-plus/>
                   </template>
                   <template #default>添加导航面板</template>
                 </a-button>
-                <a-button type="primary" @click="triggerBookmarkImport" size="mini">
+                <a-button type="secondary" @click="triggerBookmarkImport" size="small">
                   <template #icon>
                     <IconImport/>
                   </template>
                   <template #default>从书签文件导入</template>
                 </a-button>
-                <a-button type="primary" @click="exportConfig" size="mini">
+                <a-button type="secondary" @click="exportConfig" size="small">
                   <template #icon>
                     <IconExport/>
                   </template>
                   <template #default>导出配置</template>
                 </a-button>
-                <a-button type="primary" @click="openSyncModal" size="mini">
+                <a-button type="primary" @click="openSyncModal" size="small">
                   <template #icon>
                     <IconCloud/>
                   </template>
                   <template #default>云端同步{{ syncConnected ? '·已开启' : '' }}</template>
                 </a-button>
-                <a-button type="primary" @click="resetBox"
-                          size="mini">
+                <a-button type="secondary" @click="resetBox"
+                          size="small">
                   <template #icon>
                     <IconUndo/>
                   </template>
@@ -202,9 +204,9 @@
                      @change="readBookmarkFile"/>
             </a-form>
           </a-layout-content>
-          <a-layout-footer style="text-align: center;height: 50px">
+          <a-layout-footer class="settings-footer">
             <a-space wrap>
-              <a-button type="secondary" @click="switchSettingsPanel">收起设置</a-button>
+              <a-button type="secondary" long @click="switchSettingsPanel">收起设置</a-button>
             </a-space>
           </a-layout-footer>
         </a-layout>
@@ -338,6 +340,8 @@ import {
   IconDownload,
   IconLink,
   IconCopy,
+  IconMoon,
+  IconSun,
 } from '@arco-design/web-vue/es/icon';
 import {Message, Modal} from '@arco-design/web-vue';
 import {createConfigGist, fetchConfig, updateConfig} from './sync/gist.js';
@@ -1082,12 +1086,44 @@ const confirmBookmarkImport = () => {
   });
 };
 
+/** ---------------- 深色 / 浅色主题（body[arco-theme]） ---------------- */
+const THEME_KEY = 'ilink-theme';
+const isDarkTheme = ref(false);
+
+const applyTheme = () => {
+  document.body.setAttribute('arco-theme', isDarkTheme.value ? 'dark' : 'light');
+};
+
+const toggleTheme = () => {
+  isDarkTheme.value = !isDarkTheme.value;
+  try {
+    localStorage.setItem(THEME_KEY, isDarkTheme.value ? 'dark' : 'light');
+  } catch (e) {
+    console.warn('[iLink] 主题偏好写入 localStorage 失败:', e);
+  }
+  applyTheme();
+};
+
+// 初始化：优先使用用户上次的选择，否则跟随系统 prefers-color-scheme
+(() => {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(THEME_KEY);
+  } catch (e) { /* 隐私模式下读取失败，仅跟随系统 */ }
+  isDarkTheme.value = saved
+      ? saved === 'dark'
+      : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  applyTheme();
+})();
+
 /** ---------------- 角落菜单 / 设置面板 ---------------- */
 const cornerMenuClick = (key, openKeys) => {
   if (key === '1') {
     window.open('https://github.com/bestop/ilink');
   } else if (key === '2') {
     switchSettingsPanel();
+  } else if (key === '3') {
+    toggleTheme();
   } else {
     Message.error({content: `未知的菜单key`, showIcon: true});
   }
