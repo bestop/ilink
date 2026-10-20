@@ -253,6 +253,16 @@
         <a-link v-if="syncSettings.gistUrl" :href="syncSettings.gistUrl" target="_blank">打开 Gist 页面</a-link>
         <span v-else>—</span>
       </div>
+      <div class="sync-meta-row">
+        <span class="sync-meta-label">Gist ID</span>
+        <span class="sync-gist-id nowrap">{{ syncSettings.gistId }}</span>
+        <a-button size="mini" type="text" @click="copyGistId">
+          <template #icon>
+            <IconCopy/>
+          </template>
+          复制 ID
+        </a-button>
+      </div>
       <div class="sync-tip" style="margin-top: 10px">
         自动同步开启时：本机修改后 3 秒自动上传；打开页面时自动检查并拉取云端更新；两端都有修改时由你选择使用哪一份。
       </div>
@@ -327,6 +337,7 @@ import {
   IconUpload,
   IconDownload,
   IconLink,
+  IconCopy,
 } from '@arco-design/web-vue/es/icon';
 import {Message, Modal} from '@arco-design/web-vue';
 import {createConfigGist, fetchConfig, updateConfig} from './sync/gist.js';
@@ -692,6 +703,34 @@ const disconnectSync = () => {
 const openSyncModal = () => {
   syncForm.deviceName = syncSettings.deviceName || syncForm.deviceName;
   syncModalVisible.value = true;
+};
+
+// 复制 Gist ID：其他设备连接时需要填同一 ID；clipboard API 不可用时回退到临时文本域方案
+const copyGistId = () => {
+  const id = syncSettings.gistId;
+  if (!id) return;
+  const done = () => Message.success({content: 'Gist ID 已复制，在其他设备的「云端同步」弹窗中粘贴即可', showIcon: true});
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(id).then(done).catch(() => fallbackCopy(id, done));
+  } else {
+    fallbackCopy(id, done);
+  }
+};
+
+const fallbackCopy = (text, done) => {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done();
+  } catch (e) {
+    Message.warning({content: `复制失败，请手动复制：${text}`, showIcon: true});
+  }
 };
 
 onMounted(() => {

@@ -306,3 +306,9 @@ li {
     font-size: 12px;
     line-height: 1.7;
 }
+
+.sync-gist-id {
+    margin-right: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
