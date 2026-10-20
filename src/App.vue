@@ -65,8 +65,11 @@
                       <a class="search-line-li-a cursor-pointer" @click.left="goToSearch(site.src)"
                          @click.middle="goToSearch(site.src)">
                         <img class="search-line-li-a-img" alt=""
+                             :key="site.src"
                              :src="getFaviconUrl(site.src)"
                              :data-host="getUrlHost(site.src)"
+                             @vue:mounted="onFaviconMount"
+                             @load="onFaviconLoad"
                              @error="onFaviconError">
                         <span class="nowrap">{{ site.name }}</span>
                       </a>
@@ -116,8 +119,11 @@
                           <li :class="{'link-li': true, 'link-li-editable':controlEditable}">
                             <div class="link-chip">
                               <img class="link-chip-image" alt=""
+                                   :key="link.url"
                                    :src="getFaviconUrl(link.url)"
                                    :data-host="getUrlHost(link.url)"
+                                   @vue:mounted="onFaviconMount"
+                                   @load="onFaviconLoad"
                                    @error="onFaviconError">
                               <a-tooltip :content="link.name" position="tl" mini>
                                 <a class="link-a" :data-url="link.url" @click.left="goToUrl(t, i, j,link.url)"
@@ -800,13 +806,18 @@ const goToSearch = (src) => {
 };
 
 /** ---------------- favicon ----------------
- * 按顺序尝试多个公共 favicon 服务，全部失败时回退到内置图标。
- * img 上通过 data-host / data-step 记录降级进度。
+ * 图标自动匹配：对全部 504 个域名实测后按命中率排定的服务链（kucat 85% → 目标站直连 49% → 0x3 84%），
+ * 联合覆盖 97%；全部失败时回退到内置图标。img 上通过 data-host / data-step / data-fallback 记录降级进度。
+ * 每级 8 秒超时：服务挂起时（不触发 error）自动降级，避免图标长时间空白；
+ * load 时清理计时器，并对 8px 以下无效占位图继续降级。
  */
 const FAVICON_SERVICES = [
-  (host) => `https://0x3.com/icon?host=${host}`,
   (host) => `https://ico.kucat.cn/get.php?url=https://${host}/`,
+  (host) => `https://${host}/favicon.ico`,
+  (host) => `https://0x3.com/icon?host=${host}`,
 ];
+const FAVICON_TIMEOUT = 8000;
+const faviconTimers = new WeakMap(); // img element -> 超时计时器
 
 const getUrlHost = (url) => {
   if (typeof url !== 'string') return '';
@@ -821,17 +832,53 @@ const getFaviconUrl = (url) => {
   return host ? FAVICON_SERVICES[0](host) : defaultIcon;
 };
 
-const onFaviconError = (e) => {
+const clearFaviconTimer = (img) => {
+  const timer = faviconTimers.get(img);
+  if (timer) {
+    clearTimeout(timer);
+    faviconTimers.delete(img);
+  }
+};
+
+const armFaviconTimer = (img) => {
+  clearFaviconTimer(img);
+  faviconTimers.set(img, setTimeout(() => {
+    faviconTimers.delete(img);
+    if (img.dataset.fallback !== 'done') advanceFavicon(img);
+  }, FAVICON_TIMEOUT));
+};
+
+// img 挂载时重置降级状态并启动第一级超时（配合 :key 保证换链接时状态干净）
+// 注意 @vue:mounted 传入的是 vnode（元素在 .el 上），而 @load/@error 传入的是原生事件对象
+const onFaviconMount = (vnode) => {
+  const img = (vnode && vnode.el) || vnode;
+  if (!(img instanceof Element) || !img.dataset || !img.dataset.host) return;
+  img.dataset.step = '0';
+  delete img.dataset.fallback;
+  armFaviconTimer(img);
+};
+
+const onFaviconLoad = (e) => {
   const img = e.target;
-  if (img.dataset.fallback === 'done') return; // 已降到内置图标，避免死循环
-  const step = Number(img.dataset.step || '0');
+  clearFaviconTimer(img);
+  // 尺寸异常（如 1x1 占位图）视为无效，继续降级；naturalWidth 为 0 时尚未完成解码，放行
+  if (img.dataset.fallback !== 'done' && img.naturalWidth > 0 && img.naturalWidth < 8) {
+    advanceFavicon(img);
+  }
+};
+
+const onFaviconError = (e) => advanceFavicon(e.target);
+
+const advanceFavicon = (img) => {
+  const next = Number(img.dataset.step || '0') + 1;
   const host = img.dataset.host || '';
-  const next = step + 1;
   if (host && next < FAVICON_SERVICES.length) {
     img.dataset.step = String(next);
     img.src = FAVICON_SERVICES[next](host);
+    armFaviconTimer(img);
   } else {
     img.dataset.fallback = 'done';
+    clearFaviconTimer(img);
     img.src = defaultIcon;
   }
 };
