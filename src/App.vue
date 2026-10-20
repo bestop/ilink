@@ -97,21 +97,22 @@
 
             <!-- 折叠动画由 main.css 的 .search-line.no-visible max-height 过渡实现 -->
             <div class="search-bottom">
+              <!-- 编辑工具行：与折叠钮分离，避免分隔线内挤压截断 -->
+              <div class="search-bottom-tools" v-if="controlEditable">
+                <a-button size="mini" class="search-tool-btn" @click="promptSearchGroupAt(searchToolbox.length)">
+                  <template #icon>
+                    <icon-plus/>
+                  </template>
+                  <template #default>添加分组</template>
+                </a-button>
+                <a-button size="mini" class="search-tool-btn" @click="resetSearchToolbox">
+                  <template #icon>
+                    <icon-undo/>
+                  </template>
+                  <template #default>恢复默认</template>
+                </a-button>
+              </div>
               <a-divider :margin="10">
-                <a-space size="small" v-if="controlEditable" class="search-bottom-tools">
-                  <a-button size="mini" @click="promptSearchGroupAt(searchToolbox.length)">
-                    <template #icon>
-                      <icon-plus/>
-                    </template>
-                    <template #default>添加分组</template>
-                  </a-button>
-                  <a-button size="mini" @click="resetSearchToolbox">
-                    <template #icon>
-                      <icon-undo/>
-                    </template>
-                    <template #default>恢复默认</template>
-                  </a-button>
-                </a-space>
                 <a-button shape="circle" size="mini" class="search-collapse-btn" @click="switchSearchPanel()">
                   <icon-down v-if="searchToolboxCollapsed"/>
                   <icon-up v-else/>

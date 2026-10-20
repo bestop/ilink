@@ -513,7 +513,42 @@ body .arco-input-search .arco-input-icon-hover:hover::before {
   margin-top: 4px;
 }
 
-body .search-bottom .arco-btn {
+/* 编辑工具行：分隔线上方右对齐，仅编辑模式渲染 */
+.search-bottom-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 6px 8px;
+}
+
+body .search-bottom .search-tool-btn {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--ilink-text-3);
+  background-color: var(--ilink-surface);
+  border: 1px dashed var(--ilink-border);
+  font-size: 12px;
+  transition: color var(--ilink-dur) var(--ilink-ease),
+      background-color var(--ilink-dur) var(--ilink-ease),
+      border-color var(--ilink-dur) var(--ilink-ease),
+      box-shadow var(--ilink-dur) var(--ilink-ease),
+      transform var(--ilink-dur) var(--ilink-ease);
+}
+
+body .search-bottom .search-tool-btn:hover {
+  color: var(--ilink-primary);
+  background-color: var(--ilink-primary-soft);
+  border-color: var(--ilink-primary-soft-2);
+  border-style: solid;
+  transform: translateY(-1px);
+}
+
+body .search-bottom .search-tool-btn .arco-icon {
+  font-size: 12px;
+}
+
+body .search-bottom .search-collapse-btn {
   width: 28px;
   height: 28px;
   color: var(--ilink-text-3);
@@ -527,14 +562,14 @@ body .search-bottom .arco-btn {
       transform var(--ilink-dur) var(--ilink-ease);
 }
 
-body .search-bottom .arco-btn:hover {
+body .search-bottom .search-collapse-btn:hover {
   color: var(--ilink-primary);
   background-color: var(--ilink-primary-soft);
   border-color: var(--ilink-primary-soft-2);
   transform: translateY(-1px);
 }
 
-body .search-bottom .arco-btn .arco-icon {
+body .search-bottom .search-collapse-btn .arco-icon {
   font-size: 12px;
 }
 
